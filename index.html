@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13233f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<title>Three-Pillar ETF Dashboard</title>
+<meta name="description" content="Three equal-weighted mini-ETFs of three Frankfurt-listed stocks each (Banking, Industry, Oil & Energy): weekly volatility and return correlation.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <p class="kicker">Three-pillar ETF portfolio · Frankfurt</p>
+    <h1>Three pillars, three ETFs, low correlation</h1>
+    <p class="lede" id="lede">Nine Frankfurt-listed stocks grouped into three equal-weighted ETFs, one per investment pillar, and why combining the pillars diversifies a portfolio.</p>
+    <div class="palette-strip" aria-hidden="true"><i style="flex:6;background:#24395f"></i><i style="flex:3;background:var(--sage-2)"></i><i style="flex:1;background:var(--alabaster)"></i><i style="flex:.6;background:var(--gold)"></i></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="thesis" aria-selected="false">Investment thesis</button>
+    <button class="tab" role="tab" data-tab="vol" aria-selected="false">Weekly volatility</button>
+    <button class="tab" role="tab" data-tab="corr" aria-selected="false">Correlation matrix</button>
+    <button class="tab" role="tab" data-tab="risk" aria-selected="false">Short-term risk</button>
+    <button class="tab" role="tab" data-tab="ltrisk" aria-selected="false">Long-term risk</button>
+    <button class="tab" role="tab" data-tab="crises" aria-selected="false">Crisis history</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section class="page theme-a" id="page-overview">
+    <div class="stats" id="ov-stats"></div>
+
+    <h2 class="section-title">Portfolio rationale</h2>
+    <div class="card green">
+      <p>The portfolio is built from <b>three investment pillars: Banking, Industry, and Oil &amp; Energy</b>. For each pillar I build a small <b>equal-weighted ETF of three stocks</b>, so each stock is one third of its pillar ETF. Holding the three ETFs together gives nine stocks, one ninth each.</p>
+      <p>The aim is to show that the pillars move <b>remarkably independently</b> of each other, even though all nine stocks trade on the Frankfurt Stock Exchange in euros. Stocks within one pillar share the same economic drivers and tend to move together. The pillars themselves respond to different forces, so combining the three ETFs lowers the risk of the whole portfolio without giving up equity exposure.</p>
+      <div class="sectors">
+        <div class="sector" style="--c: var(--banking)">
+          <h3>Banking ETF <span class="pill">3 stocks</span></h3>
+          <ul>
+            <li>Interest rates and the yield curve, which set lending margins</li>
+            <li>The credit cycle and loan losses</li>
+            <li>Regulation, capital returns and consolidation</li>
+          </ul>
+        </div>
+        <div class="sector" style="--c: var(--industry)">
+          <h3>Industry ETF <span class="pill">3 stocks</span></h3>
+          <ul>
+            <li>Corporate investment cycles and order books</li>
+            <li>Grid, wind and power equipment for the energy transition</li>
+            <li>Project execution and industrial services demand</li>
+          </ul>
+        </div>
+        <div class="sector" style="--c: var(--oilenergy)">
+          <h3>Oil &amp; Energy ETF <span class="pill">3 stocks</span></h3>
+          <ul>
+            <li>Crude prices and refining margins</li>
+            <li>Power prices and renewable generation</li>
+            <li>Geopolitics and supply shocks</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:14px">An oil price spike lifts oil producers but raises costs for industrial companies; a change in interest rates moves banks far more than turbine makers or utilities. Mixing integrated oil with a renewable power producer inside the Oil &amp; Energy pillar also spreads its exposure across fossil and green energy. Because these shocks hit the pillars differently, their returns partly offset each other.</p>
+    </div>
+
+    <h2 class="section-title">The three pillar ETFs</h2>
+    <div class="etf-grid">
+      <div class="card" id="card-etf-perf">
+        <h2>Growth of 100: pillar ETFs and combined portfolio</h2>
+        <p class="note">Equal-weighted, rebalanced daily. The dashed line holds all three ETFs in equal parts.</p>
+        <div class="box" id="etf-perf"></div>
+      </div>
+      <div class="card" id="card-etf-corr">
+        <h2>How the ETFs move together</h2>
+        <p class="note">Correlation of daily ETF returns over the last year. Values near 0 mean the pillars move independently.</p>
+        <div class="box" id="etf-corr" style="min-height:200px"></div>
+        <div class="stats" id="etf-risk" style="margin-top:14px"></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Inside the pillars</h2>
+    <div class="grid">
+      <div class="card green" id="card-blocks">
+        <h2>Average stock correlation: within vs across pillars</h2>
+        <p class="note">Mean pairwise correlation of daily log returns between individual stocks. Lower means more independent.</p>
+        <div class="box" id="ov-bars"></div>
+      </div>
+      <div class="card" id="card-perf">
+        <h2>Growth of 100: individual stocks</h2>
+        <p class="note">Every stock rebased to 100 on the first day. The paths diverge because the pillars respond to different news.</p>
+        <div class="box" id="ov-perf"></div>
+      </div>
+    </div>
+    <p class="method" id="ov-finding"></p>
+  </section>
+
+  <!-- INVESTMENT THESIS (qualitative analysis) -->
+  <section class="page theme-a" id="page-thesis" hidden>
+    <div class="card thesis-hero">
+      <p class="kicker">The idea in one sentence</p>
+      <p class="big-quote">Own the three sectors the real economy cannot run without, the ones that <b>finance</b> it, <b>build</b> it and <b>power</b> it, through companies whose value rests on <b>today's revenues</b>, and let their different cycles offset each other.</p>
+    </div>
+
+    <h2 class="section-title">1 · The backbone of the economy</h2>
+    <p class="method" style="margin-top:0">Every economic activity needs credit, physical capacity and energy. Households and firms can delay a new phone or a holiday; they cannot stop using payment systems, maintaining plants or buying power. The three pillars sit at those choke points.</p>
+    <div class="sectors pillars3">
+      <div class="card sector" style="--c: var(--banking)">
+        <h3>Banking: finances the economy</h3>
+        <p class="role">Moves savings into loans, runs payments, underwrites trade and investment. No sector can grow without credit.</p>
+        <dl>
+          <dt>Revenue engine</dt><dd>Net interest income on loans and deposits, fees from payments, asset management and capital markets.</dd>
+          <dt>Demand driver</dt><dd>Loan growth, the level and shape of interest rates, business and trade activity.</dd>
+          <dt>Structural tailwind</dt><dd>Positive interest rates after a decade of zero rates; consolidation and buybacks in European banking; financing Europe's investment wave.</dd>
+          <dt>Watch</dt><dd>Net interest margin, CET1 capital ratio, cost of risk, cost/income ratio.</dd>
+        </dl>
+      </div>
+      <div class="card sector" style="--c: var(--industry)">
+        <h3>Industry: builds the economy</h3>
+        <p class="role">Makes and maintains the physical capital: power plants, grids, turbines, process plants, industrial services.</p>
+        <dl>
+          <dt>Revenue engine</dt><dd>Order backlog converted into sales over several years, plus recurring service and maintenance contracts.</dd>
+          <dt>Demand driver</dt><dd>Corporate and public investment budgets, the energy transition, electrification.</dd>
+          <dt>Structural tailwind</dt><dd>Germany's €500 bn infrastructure and climate-neutrality fund (approved March 2025, over 12 years); the EU's estimate of €584 bn grid investment needed this decade.</dd>
+          <dt>Watch</dt><dd>Order intake, book-to-bill, backlog, service share of revenue, margins and free cash flow.</dd>
+        </dl>
+      </div>
+      <div class="card sector" style="--c: var(--oilenergy)">
+        <h3>Oil &amp; Energy: powers the economy</h3>
+        <p class="role">Supplies the fuels and electricity everything else runs on, from fossil (integrated oil, refining) to renewable generation.</p>
+        <dl>
+          <dt>Revenue engine</dt><dd>Sales of crude, gas, refined products and power; long-term power purchase agreements and regulated returns.</dd>
+          <dt>Demand driver</dt><dd>Energy consumption, commodity and power prices, refining margins.</dd>
+          <dt>Structural tailwind</dt><dd>Rising electricity demand from electrification and data centres; energy security after 2022. Mixing oil with renewables spreads the pillar across both energy worlds.</dd>
+          <dt>Watch</dt><dd>Oil and gas prices, refining margins, power prices, production volumes, capex discipline and dividends.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <h2 class="section-title">2 · Why "revenue-driven" matters</h2>
+    <div class="grid">
+      <div class="card green">
+        <h3>What the pillars have in common</h3>
+        <ul class="checks">
+          <li><b>Essential demand.</b> Credit, industrial maintenance and energy are needed in every phase of the cycle; volumes fall less than for discretionary goods.</li>
+          <li><b>Visible, often contracted revenue.</b> Loan books, multi-year order backlogs, service contracts and power purchase agreements give earnings visibility.</li>
+          <li><b>Value anchored in current earnings.</b> Much of the share price is backed by profits and dividends being earned now, not by profits expected in ten years. That makes the stocks less sensitive to rising discount rates than long-duration growth stocks.</li>
+          <li><b>Inflation pass-through.</b> Banks earn more when rates rise with inflation, energy companies sell at market prices, and industrial contracts are often index-linked.</li>
+          <li><b>Cash returns.</b> Mature, cash-generative businesses tend to pay dividends and buy back shares, which adds a steady component to total return.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>The honest caveat</h3>
+        <p>Revenue-driven does not mean defensive. All three pillars are <b>cyclical</b>: bank profits fall in recessions as loan losses rise, industrial orders get postponed when clients delay investment, and energy earnings swing with commodity prices.</p>
+        <p>The strategy does not rely on any single pillar being safe. It relies on the pillars being exposed to <b>different</b> cycles, so that a bad year for one is rarely a bad year for all three at once. Sections 3 and 4 test that idea.</p>
+      </div>
+    </div>
+
+    <h2 class="section-title">3 · Different shocks hit different pillars</h2>
+    <div class="card">
+      <p class="note" style="margin-top:0">Typical first-order effect of each macro shock (▲ helps, ▼ hurts, ● limited effect). These are qualitative tendencies, not forecasts.</p>
+      <div class="tablewrap">
+        <table class="compact shock-map">
+          <thead><tr><th class="l">Macro shock</th><th>Banking</th><th>Industry</th><th>Oil &amp; Energy</th><th class="l">Portfolio effect</th></tr></thead>
+          <tbody>
+            <tr><td class="l">Interest rates rise</td><td class="up-c">▲ wider margins</td><td class="dn-c">▼ dearer project finance</td><td class="nt-c">● </td><td class="l">Partly offset</td></tr>
+            <tr><td class="l">Interest rates fall sharply</td><td class="dn-c">▼ margin squeeze</td><td class="up-c">▲ cheaper capex</td><td class="up-c">▲ cheaper renewables finance</td><td class="l">Partly offset</td></tr>
+            <tr><td class="l">Oil price spike</td><td class="nt-c">● </td><td class="dn-c">▼ input costs</td><td class="up-c">▲ higher prices and margins</td><td class="l">Offset</td></tr>
+            <tr><td class="l">Oil price crash</td><td class="nt-c">● </td><td class="up-c">▲ lower costs</td><td class="dn-c">▼ lower revenue</td><td class="l">Offset</td></tr>
+            <tr><td class="l">Inflation surge</td><td class="up-c">▲ higher rates</td><td class="nt-c">● index-linked contracts</td><td class="up-c">▲ pricing power</td><td class="l">Mostly positive</td></tr>
+            <tr><td class="l">Investment boom (infrastructure, grids)</td><td class="up-c">▲ loan demand</td><td class="up-c">▲ orders</td><td class="up-c">▲ power demand</td><td class="l">Positive</td></tr>
+            <tr><td class="l">Credit or banking crisis</td><td class="dn-c">▼▼ losses</td><td class="dn-c">▼ financing harder</td><td class="nt-c">● essential demand</td><td class="l">Cushioned by energy</td></tr>
+            <tr><td class="l">Broad recession</td><td class="dn-c">▼ loan losses</td><td class="dn-c">▼ orders delayed</td><td class="dn-c">▼ lower demand</td><td class="l">Hit, but less than single pillars</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2 class="section-title">4 · Systematic risk: what diversification can and cannot do</h2>
+    <div class="grid">
+      <div class="card green">
+        <h3>The theory in three lines</h3>
+        <p>A stock's risk has two parts. <b>Idiosyncratic risk</b> comes from the company or its sector (a profit warning, a regulation, an oil-price move). <b>Systematic risk</b> comes from the whole market (a recession, a global sell-off) and can never be fully diversified away inside equities.</p>
+        <p>Combining three pillars with different drivers removes most of the idiosyncratic and sector risk and <b>lowers</b> the exposure to systematic risk, because one pillar (here Oil &amp; Energy) barely moves with the broad market. What remains is a portfolio that still falls in a market crash, but by less.</p>
+        <p>The market-exposure figures alongside test this against the <b>DAX</b> over the same period.</p>
+      </div>
+      <div class="card" id="card-sys">
+        <h3>Market exposure vs the DAX</h3>
+        <div class="controls"><span class="label">Window</span><div class="seg" id="sys-win"><button data-v="252">Last 1Y</button><button data-v="0">Full 2Y</button></div></div>
+        <div class="stats" id="sys-kpis"></div>
+        <div class="tablewrap" style="margin-top:12px"><table class="compact" id="sys-table"><thead><tr><th class="l">Series</th><th>Beta</th><th>R²</th><th>Downside capture</th><th>Upside capture</th><th>Avg on DAX's 10 worst days</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card green" id="card-sys-bars">
+        <h3>On the DAX's 10 worst days</h3>
+        <p class="note">Average daily return of each pillar ETF and of the portfolio on the ten days the DAX fell most in the window.</p>
+        <div class="box" id="sys-bars" style="min-height:220px"></div>
+      </div>
+      <div class="card" id="card-sys-corr">
+        <h3>Do the pillars still diversify in a sell-off?</h3>
+        <p class="note">Correlation between pillar ETFs on all days vs on the DAX's worst 10% of days. Correlations usually rise in stress; that is the part of systematic risk diversification cannot remove.</p>
+        <div class="box" id="sys-corr" style="min-height:200px"></div>
+      </div>
+    </div>
+    <p class="method" id="sys-finding"></p>
+
+    <h2 class="section-title">5 · Risks to the thesis</h2>
+    <div class="card green">
+      <ul class="checks risks">
+        <li><b>Home bias.</b> Most of the companies are German or European, so a European recession, energy crisis or political shock would hit all three pillars together.</li>
+        <li><b>Value and cyclical tilt.</b> All three pillars are "old economy" value sectors. In a growth-led or technology-driven market they can lag for long periods, and the portfolio has no technology, healthcare or consumer-staples exposure.</li>
+        <li><b>Policy and regulation.</b> Bank capital rules, windfall taxes on energy, subsidy changes for renewables and wind, and carbon pricing can change profitability quickly.</li>
+        <li><b>Energy transition.</b> Oil assets risk becoming stranded over time; renewables and wind manufacturers face execution and pricing pressure. Holding both reduces but does not remove this.</li>
+        <li><b>Concentration.</b> Nine stocks is a small portfolio; company events (profit warnings, takeovers, mergers) still move the result.</li>
+        <li><b>Correlations are not constant.</b> They rose in the April 2025 sell-off and will rise again in the next crisis (see the chart above and the stress tests in the Short-term risk tab).</li>
+        <li><b>Long history is less kind.</b> Over 20 years the 1-year correlation between the pillars was around 0.4–0.5 most of the time, the two pairs involving Oil &amp; Energy are now near their lowest readings since 2001, and the portfolio fell more than the DAX in 7 of the 10 crises since 2001, all of them bank-, credit- or liquidity-driven (see Long-term risk and Crisis history).</li>
+      </ul>
+    </div>
+
+    <h2 class="section-title">6 · How to run it</h2>
+    <div class="grid">
+      <div class="card green">
+        <h3>Implementation</h3>
+        <ul class="checks">
+          <li>Hold the three pillar ETFs in equal parts (or a risk-parity mix; see the Short-term risk tab and the Crisis history implementation section) and rebalance back to target, for example quarterly or when a pillar drifts more than 5 points.</li>
+          <li>Keep each stock near one third of its pillar so no single company dominates.</li>
+          <li>Set a risk budget, such as a 1-day 99% Expected Shortfall limit, and review positions when it is breached.</li>
+          <li>Replace a stock when its business no longer fits its pillar's role, not because of short-term price moves.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Monitoring checklist</h3>
+        <table class="compact wrap-cells"><tbody>
+          <tr><td class="l"><b style="color:var(--banking)">Banking</b></td><td class="l">ECB rate path, net interest margins, loan growth, credit spreads, CET1 ratios</td></tr>
+          <tr><td class="l"><b style="color:var(--industry)">Industry</b></td><td class="l">PMI and order intake, book-to-bill, infrastructure-fund disbursement, grid tenders</td></tr>
+          <tr><td class="l"><b style="color:var(--oilenergy)">Oil &amp; Energy</b></td><td class="l">Brent, refining margins, power and gas prices, renewable auction prices</td></tr>
+          <tr><td class="l"><b>Portfolio</b></td><td class="l">Rolling pillar correlations, beta to the DAX, VaR/ES vs budget, drawdown</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <p class="method">Sources for the structural tailwinds: German Federal Ministry of Finance, <i>Special Fund for Infrastructure and Climate Neutrality</i>; European Commission, <i>Grids, the missing link: An EU Action Plan for Grids</i> (COM(2023) 757). Benchmark: DAX index from Yahoo Finance (^GDAXI). Full write-up: <code>docs/INVESTMENT_THESIS.md</code>.</p>
+  </section>
+
+  <!-- VOLATILITY -->
+  <section class="page theme-a" id="page-vol" hidden>
+    <div class="grid">
+      <div class="card wide" id="card-vol-table">
+        <h2>Latest week by stock and ETF</h2>
+        <p class="note">Weekly volatility = standard deviation of the week's daily log returns, annualised (×√252). Click a row to plot it alone below.</p>
+        <div class="tablewrap">
+          <table id="vol-table">
+            <thead><tr>
+              <th class="l"><button data-sort="name">Name</button></th>
+              <th class="l"><button data-sort="sector">Pillar</button></th>
+              <th><button data-sort="ret_total">2-year return</button></th>
+              <th><button data-sort="ret_last">Week return</button></th>
+              <th><button data-sort="vol_last">Weekly vol</button></th>
+              <th><button data-sort="vol_chg">vs prior week</button></th>
+              <th><button data-sort="vol_avg52">52-wk avg vol</button></th>
+              <th><button data-sort="vol_max52">52-wk peak vol</button></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card green wide" id="card-vol-lines">
+        <h2>Weekly volatility over time</h2>
+        <p class="note">Annualised, per calendar week. Pick stocks, a whole pillar, or the ETFs.</p>
+        <div class="controls">
+          <div class="seg" id="sector-seg"><button data-p="All">All stocks</button><button data-p="Banking">Banking</button><button data-p="Industry">Industry</button><button data-p="Oil &amp; Energy">Oil &amp; Energy</button><button data-p="ETFs">ETFs</button></div>
+          <div class="chips" id="stock-chips"></div>
+        </div>
+        <div class="box" id="vol-lines"></div>
+      </div>
+      <div class="card wide" id="card-vol-heat">
+        <h2>Volatility heatmap</h2>
+        <p class="note">Each cell is one week; darker and redder means more volatile. Spikes rarely line up across pillars, and the ETF rows are calmer than their members.</p>
+        <div class="box box-heat" id="vol-heat"></div>
+        <div class="legend" id="heat-legend"></div>
+      </div>
+      <div class="card green wide" id="card-sector-vol">
+        <h2>Weekly volatility of the pillar ETFs</h2>
+        <p class="note">Each ETF's own weekly volatility, which sits below the average of its three stocks because they don't move in lockstep.</p>
+        <div class="box" id="sector-lines"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CORRELATION -->
+  <section class="page theme-a" id="page-corr" hidden>
+    <div class="grid">
+      <div class="card" id="card-corr">
+        <h2>Correlation of returns</h2>
+        <p class="note">Pearson correlation of log returns. In the stock view, the outlined blocks are the pillars; the pale areas between them are the diversification. Click a cell to see how that pair has moved.</p>
+        <div class="controls">
+          <span class="label">View</span>
+          <div class="seg" id="level-seg"><button data-l="stocks">Stocks</button><button data-l="etfs">Pillar ETFs</button></div>
+          <span class="label">Window</span>
+          <div class="seg" id="win-seg"><button data-w="3M">3M</button><button data-w="6M">6M</button><button data-w="1Y">1Y</button><button data-w="2Y">2Y</button></div>
+          <span class="label">Returns</span>
+          <div class="seg" id="freq-seg"><button data-f="daily">Daily</button><button data-f="weekly">Weekly</button></div>
+        </div>
+        <div class="box box-corr" id="corr-matrix"></div>
+        <div class="legend" id="corr-legend"></div>
+        <div class="stats" id="corr-stats" style="margin-top:14px"></div>
+      </div>
+      <div class="card green" id="card-roll">
+        <h2 id="roll-title">Rolling correlation</h2>
+        <p class="note">63-trading-day (≈3-month) correlation of daily returns, sampled weekly.</p>
+        <div class="box" id="corr-roll"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHORT-TERM RISK (layer 1) -->
+  <section class="page theme-b" id="page-risk" hidden>
+    <div class="layer-banner">
+      <span class="layer-tag">Layer 1 of 2</span>
+      <div><b>Short-term risk:</b> how much can be lost over 1 day to 1 month, estimated from the last 1–2 years of daily prices (the Frankfurt quotes used throughout this dashboard). For 1- and 5-year horizons estimated from 20 years of data, see <a href="#ltrisk" data-goto="ltrisk">Long-term risk</a>.</div>
+    </div>
+    <div class="card risk-controls" id="risk-controls">
+      <h2>Portfolio and risk settings</h2>
+      <p class="note">Everything below recalculates from daily prices when you change a setting. Losses are shown as positive numbers.</p>
+      <div class="rc-grid">
+        <label class="rc"><span class="label">Portfolio value (€)</span><input type="number" id="rk-value" min="100" step="100" value="15000" inputmode="decimal"></label>
+        <div class="rc"><span class="label">Confidence level</span><div class="seg" id="rk-conf"><button data-v="0.95">95%</button><button data-v="0.975">97.5%</button><button data-v="0.999">99.9%</button></div></div>
+        <div class="rc"><span class="label">Horizon (trading days)</span><div class="seg" id="rk-h"><button data-v="1">1 day</button><button data-v="5">1 week</button><button data-v="10">10 days</button><button data-v="21">1 month</button></div></div>
+        <div class="rc"><span class="label">Estimation window</span><div class="seg" id="rk-win"><button data-v="252">Last 1Y</button><button data-v="0">Full 2Y</button></div></div>
+        <div class="rc rc-wide"><span class="label">Weighting scheme</span><div class="seg" id="rk-wscheme"><button data-v="equal">Equal (1/9)</button><button data-v="pillar">Pillar mix</button><button data-v="invvol">Inverse vol</button><button data-v="erc">Risk parity (ERC)</button><button data-v="minvar">Min variance</button></div></div>
+        <div class="rc rc-wide" id="rk-sliders"></div>
+      </div>
+    </div>
+
+    <div class="stats" id="rk-kpis" style="margin-top:16px"></div>
+    <p class="method" id="rk-summary"></p>
+
+    <div class="grid">
+      <div class="card" id="card-rk-methods">
+        <h2>VaR and Expected Shortfall by method</h2>
+        <p class="note">Seven estimation methods used on hedge-fund risk desks. Wide gaps between methods signal fat tails or changing volatility. At 99.9% the historical estimate is essentially the worst day in the window (1 in 1,000 days, but the window has only 252–506); the parametric and Monte Carlo methods extrapolate beyond the data.</p>
+        <div class="box" id="rk-methods"></div>
+        <div class="tablewrap"><table id="rk-method-table" class="compact"><thead><tr><th class="l">Method</th><th>VaR €</th><th>VaR %</th><th>ES €</th><th>ES %</th><th>ES / VaR</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card" id="card-rk-hist">
+        <h2>Distribution of daily portfolio returns</h2>
+        <p class="note">Historical daily returns with a fitted normal curve. Bars left of the VaR line are the tail; ES is their average.</p>
+        <div class="box" id="rk-hist"></div>
+        <div class="stats" id="rk-moments" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="card-rk-fan" style="margin-top:16px">
+      <h2>Fan chart: the next month</h2>
+      <p class="note">Possible paths of the portfolio value over the next 21 trading days, built by resampling the daily returns of the estimation window. Shaded bands contain 50%, 80%, 90% and 98% of paths; the red dashed line is the VaR boundary at the chosen confidence level; the vertical line marks the selected horizon.</p>
+      <div class="box" id="rk-fan" style="min-height:340px"></div>
+      <p class="note" id="rk-fan-note" style="margin-top:8px"></p>
+    </div>
+
+    <h2 class="section-title">Where the risk comes from</h2>
+    <div class="grid">
+      <div class="card" id="card-rk-comp">
+        <h2>Risk contribution by stock</h2>
+        <p class="note">Euler decomposition: component VaR (parametric) and component ES (historical). Contributions add up to the portfolio total; a share above the weight means the stock adds more risk than capital.</p>
+        <div class="box" id="rk-comp"></div>
+      </div>
+      <div class="card" id="card-rk-pillar">
+        <h2>Pillars and diversification</h2>
+        <p class="note">Weight, share of VaR and stand-alone VaR per pillar. The diversification benefit is the stand-alone sum minus the portfolio VaR.</p>
+        <div class="tablewrap"><table id="rk-pillar-table" class="compact"><thead><tr><th class="l">Pillar</th><th>Weight</th><th>Stand-alone VaR €</th><th>Component VaR €</th><th>Share of VaR</th><th>Share of ES</th></tr></thead><tbody></tbody></table></div>
+        <div class="box" id="rk-divbar" style="min-height:120px"></div>
+        <p class="note" id="rk-tailnote"></p>
+      </div>
+    </div>
+
+    <h2 class="section-title">Does the model work? Backtesting</h2>
+    <div class="card" id="card-rk-bt">
+      <h2>Rolling 1-day VaR vs realised P&amp;L</h2>
+      <p class="note">Each day's VaR is estimated only from the previous 250 days, then compared with that day's actual profit or loss. Red dots are exceptions (loss larger than VaR). At 99.9% only about 0.3 exceptions are expected in 256 days, so one exception already moves a model to the yellow zone and the tests have very little power; switch to 95% or 97.5% to judge the models.</p>
+      <div class="controls"><span class="label">Model</span><div class="seg" id="rk-btmodel"><button data-v="hist">Historical</button><button data-v="normal">Normal</button><button data-v="ewma">EWMA</button><button data-v="fhs">Filtered HS</button></div></div>
+      <div class="box" id="rk-bt" style="min-height:300px"></div>
+      <div class="tablewrap"><table id="rk-bt-table" class="compact"><thead><tr><th class="l">Model</th><th>Days tested</th><th>Exceptions</th><th>Expected</th><th>Kupiec p-value</th><th>Christoffersen p-value</th><th>Basel zone</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <h2 class="section-title">Stress testing</h2>
+    <div class="grid">
+      <div class="card" id="card-rk-stress">
+        <h2>Scenario losses</h2>
+        <p class="note">Historical: the worst stretches actually seen in the data. Hypothetical: illustrative instantaneous shocks per pillar (assumptions, not forecasts).</p>
+        <div class="tablewrap"><table id="rk-stress-table" class="compact"><thead><tr><th class="l">Scenario</th><th class="l">Type</th><th>P&amp;L €</th><th>P&amp;L %</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card" id="card-rk-corr">
+        <h2>Correlation and volatility stress</h2>
+        <p class="note">In crises correlations jump towards 1 and diversification fades. Drag to see parametric VaR if every pair had the same correlation, and with volatility scaled up.</p>
+        <div class="rc-grid">
+          <label class="rc"><span class="label">Stressed correlation <b id="rk-rho-v">0.80</b></span><input type="range" id="rk-rho" min="0" max="1" step="0.05" value="0.8"></label>
+          <label class="rc"><span class="label">Volatility multiplier <b id="rk-volm-v">1.5×</b></span><input type="range" id="rk-volm" min="1" max="3" step="0.1" value="1.5"></label>
+        </div>
+        <div class="stats" id="rk-corrstress" style="margin-top:12px"></div>
+        <div class="box" id="rk-dd" style="min-height:220px; margin-top:12px"></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Risk-adjusted performance</h2>
+    <div class="card" id="card-rk-perf">
+      <h2>Performance and tail statistics</h2>
+      <p class="note">Over the estimation window. Risk-free rate for Sharpe and Sortino: <input type="number" id="rk-rf" value="2" step="0.25" style="width:4.5rem"> % a year.</p>
+      <div class="tablewrap"><table id="rk-perf-table" class="compact"><thead><tr><th class="l">Series</th><th>Ann. return</th><th>Ann. vol</th><th>Sharpe</th><th>Sortino</th><th>Max drawdown</th><th>Calmar</th><th>Skew</th><th>Excess kurtosis</th><th>1d VaR 99.9%</th><th>1d ES 97.5%</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card" id="card-rk-weights" style="margin-top:16px">
+      <h2>Weights used</h2>
+      <p class="note">Long-only, fully invested. Optimised schemes use the covariance of the estimation window.</p>
+      <div class="box" id="rk-weights" style="min-height:160px"></div>
+    </div>
+    <p class="method">Full methodology, formulas and code notes: <code>docs/RISK_METHODOLOGY.md</code>. A Python reference implementation that reproduces these numbers is in <code>python/risk_metrics.py</code>.</p>
+  </section>
+
+  <!-- LONG-TERM RISK (layer 2) -->
+  <section class="page theme-b" id="page-ltrisk" hidden>
+    <div class="layer-banner">
+      <span class="layer-tag">Layer 2 of 2</span>
+      <div><b>Long-term risk:</b> how much the three-pillar portfolio can lose over a <b>1-year or 5-year holding period</b>, estimated from up to 25 years of daily data (2001–2026, primary listings on Xetra, Euronext and Warsaw, in EUR). Short horizons are covered in <a href="#risk" data-goto="risk">Short-term risk</a>; the events behind the worst numbers are explained in <a href="#crises" data-goto="crises">Crisis history</a>.</div>
+    </div>
+    <div class="card risk-controls">
+      <h2>Long-term settings</h2>
+      <p class="note">Portfolio = the three pillar ETFs in equal parts, each an equal basket of the pillar stocks that were listed at the time. The DAX is shown as the benchmark.</p>
+      <div class="rc-grid">
+        <label class="rc"><span class="label">Portfolio value (€)</span><input type="number" id="lt-value" min="100" step="100" value="15000" inputmode="decimal"></label>
+        <div class="rc"><span class="label">Holding period (horizon)</span><div class="seg" id="lt-h"><button data-v="252">1 year</button><button data-v="1260">5 years</button></div></div>
+        <div class="rc"><span class="label">Confidence level</span><div class="seg" id="lt-conf"><button data-v="0.95">95%</button><button data-v="0.975">97.5%</button><button data-v="0.99">99%</button><button data-v="0.999">99.9%</button></div></div>
+        <div class="rc"><span class="label">Training data</span><div class="seg" id="lt-train"><button data-v="20y">Last 20 years</button><button data-v="all">Since 2001</button></div></div>
+      </div>
+    </div>
+
+    <div class="stats" id="lt-kpis" style="margin-top:16px"></div>
+    <p class="method" id="lt-summary"></p>
+
+    <div class="card" id="card-lt-fan" style="margin-bottom:16px">
+      <h2 id="lt-fan-title">Fan chart</h2>
+      <p class="note">How the value of the investment could evolve over the holding period: the dark line is the median path, the shaded bands contain 50%, 80%, 90% and 98% of simulated paths, the red dashed line is the VaR boundary at the chosen confidence level. Hover for the values at any date.</p>
+      <div class="controls">
+        <span class="label">Show</span>
+        <div class="seg" id="lt-fansel"><button data-v="Portfolio">Portfolio</button><button data-v="Banking">Banking</button><button data-v="Industry">Industry</button><button data-v="Oil &amp; Energy">Oil &amp; Energy</button><button data-v="DAX">DAX</button></div>
+        <label class="label" style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lt-fancmp" checked> compare with DAX</label>
+      </div>
+      <div class="box" id="lt-fan" style="min-height:340px"></div>
+      <p class="note" id="lt-fan-note" style="margin-top:8px"></p>
+    </div>
+
+    <div class="grid">
+      <div class="card wide" id="card-lt-methods">
+        <h2>Long-horizon VaR and Expected Shortfall</h2>
+        <p class="note">Five estimators for the loss over the whole holding period. Losses cannot exceed 100% of a long-only portfolio.</p>
+        <div class="tablewrap"><table class="compact" id="lt-method-table"><thead><tr><th class="l">Method</th><th>VaR €</th><th>VaR %</th><th>ES €</th><th>ES %</th><th>DAX VaR %</th><th>DAX ES %</th></tr></thead><tbody></tbody></table></div>
+        <p class="note" id="lt-method-note" style="margin-top:10px"></p>
+      </div>
+      <div class="card wide" id="card-lt-hist">
+        <h2 id="lt-hist-title">Distribution of holding-period returns</h2>
+        <p class="note">Every overlapping holding period in the training data (one starting on each trading day). Bars left of the VaR line are the tail; the outline is the DAX.</p>
+        <div class="box" id="lt-hist"></div>
+      </div>
+    </div>
+
+    <div class="card" id="card-lt-outcomes" style="margin-top:16px">
+      <h2>Range of outcomes (block bootstrap)</h2>
+      <p class="note">10,000 simulated holding periods built from randomly drawn 3-month blocks of history, which keeps fat tails and volatility clustering. Percentiles of the total return over the horizon.</p>
+      <div class="tablewrap"><table class="compact" id="lt-out-table"><thead><tr><th class="l">Series</th><th>1st pct</th><th>5th pct</th><th>25th pct</th><th>Median</th><th>75th pct</th><th>95th pct</th><th>P(loss)</th><th>VaR %</th><th>ES %</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <h2 class="section-title">When did the worst periods happen?</h2>
+    <div class="card" id="card-lt-roll">
+      <h2 id="lt-roll-title">Rolling holding-period return</h2>
+      <p class="note">Return of a position bought on each date and held for the selected horizon, plotted at the end of the holding period. Shaded bands mark the crises analysed in Crisis history.</p>
+      <div class="box" id="lt-roll" style="min-height:300px"></div>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card" id="card-lt-dd">
+        <h2>Drawdowns since 2001</h2>
+        <p class="note">Fall from the previous peak. The portfolio and its pillars against the DAX.</p>
+        <div class="controls"><span class="label">Show</span><div class="seg" id="lt-ddsel"><button data-v="port">Portfolio vs DAX</button><button data-v="pillars">Pillars</button></div></div>
+        <div class="box" id="lt-dd" style="min-height:260px"></div>
+        <div class="tablewrap"><table class="compact" id="lt-dd-table"><thead><tr><th class="l">Series</th><th>Max drawdown</th><th class="l">Trough</th><th>Longest time under water</th><th class="l">Status today</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card" id="card-lt-corr">
+        <h2>Is today's low correlation normal?</h2>
+        <p class="note">Rolling 1-year correlation of daily returns between the pillar ETFs since 2001. Today's value and each pair's long-run median are shown below the chart.</p>
+        <div class="box" id="lt-corr" style="min-height:260px"></div>
+        <div class="stats" id="lt-corr-stats" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Long-run performance</h2>
+    <div class="card" id="card-lt-perf">
+      <h2>Risk and return over the training period</h2>
+      <p class="note">Annualised figures; Sharpe ratio uses a 2% risk-free rate.</p>
+      <div class="tablewrap"><table class="compact" id="lt-perf-table"><thead><tr><th class="l">Series</th><th>CAGR</th><th>Ann. vol</th><th>Sharpe</th><th>Max drawdown</th><th>Worst year</th><th>Best year</th><th>Positive years</th><th>Beta to DAX</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card" id="card-lt-years" style="margin-top:16px">
+      <h2>Calendar-year returns</h2>
+      <p class="note">Green = gain, red = loss; colour intensity scales with size. The current year is year-to-date.</p>
+      <div class="tablewrap" style="max-height:34rem"><table class="compact" id="lt-year-table"><thead><tr><th class="l">Year</th><th>Banking</th><th>Industry</th><th>Oil &amp; Energy</th><th>Portfolio</th><th>DAX</th><th>Portfolio − DAX</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Data notes</h2>
+      <ul class="checks" id="lt-notes">
+        <li>Daily dividend-adjusted closes from Yahoo Finance on each stock's primary listing (Xetra, Euronext Paris and Amsterdam, Warsaw converted to EUR), aligned to the Xetra calendar; other venues' holidays are filled with the last price for up to five days.</li>
+        <li>A stock joins its pillar on its first reliable price: Industry 1 from April 2001, Oil &amp; Energy 3 from April 2003, Oil &amp; Energy 1 from July 2005 (earlier data is not adjusted for a share unification), Industry 3 from September 2020 (listing date). Before that the pillar ETF is the equal-weighted average of the members that existed, so pillar risk is measured with two stocks in those years.</li>
+        <li>These primary-listing prices close at the same time as the DAX, so betas and correlations here are more accurate than those from the Frankfurt floor quotes used in the other tabs. One series differs materially: Frankfurt quotes for Oil &amp; Energy 3 before mid-2025 are far below the primary listing converted to EUR, which overstates that stock's two-year return in the short-term data.</li>
+        <li>Overlapping holding periods are not independent: 20 years contain only about 20 separate 1-year periods and 4 separate 5-year periods, so tail estimates at 99% and above rest on very few real episodes. The bootstrap and lognormal estimates extrapolate; read them as orders of magnitude.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CRISIS HISTORY -->
+  <section class="page theme-a" id="page-crises" hidden></section>
+
+  <footer>
+    <p>Data: daily closing prices of nine stocks listed on the Frankfurt Stock Exchange, October 2024 – October 2026 (overview, volatility, correlation, thesis and short-term risk tabs), and daily prices of the same stocks on their primary listings since 2000 (long-term risk and crisis history), sourced from Yahoo Finance. Company names are anonymised and prices are rebased to 100, so only relative moves are shown. Pillar ETFs are hypothetical equal-weighted baskets rebalanced daily, before costs. Weeks with fewer than three trading days are excluded from the volatility figures. One Oil &amp; Energy stock trades thinly on this venue, so isolated stale quotes can lift its weekly volatility.</p>
+    <p>For educational purposes only; not investment advice. Past correlations can change, and tend to rise in market-wide sell-offs.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="data/data.js"></script>
+<script src="assets/fan.js"></script>
+<script src="assets/risk.js"></script>
+<script src="assets/thesis.js"></script>
+<script src="data/longterm.js"></script>
+<script src="assets/ltrisk.js"></script>
+<script src="assets/crises.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
