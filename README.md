@@ -105,7 +105,7 @@ python python/longterm_risk.py --crises                                         
 No build step, just static files.
 
 - **Locally:** open `index.html` in a browser (needs internet access for the d3 library from cdnjs).
-- **GitHub Pages:** push this folder to a repository, then *Settings → Pages → Deploy from a branch → `main` / root*. The dashboard will be live at `https://<your-user>.github.io/<repo>/`.
+- **GitHub Pages:** push this folder to a repository, then *Settings → Pages → Deploy from a branch → `main` / root*. The dashboard will be live at `https://verjokiel.github.io/FRANKFURT08/#vol`.
 
 ```
 ├── index.html             page layout and text
