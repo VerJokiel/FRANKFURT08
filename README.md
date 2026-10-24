@@ -139,3 +139,12 @@ No build step, just static files.
 - Banking and Industry are moderately linked at ETF level (≈0.47 over the last year); most of the diversification comes from Oil & Energy.
 - One Oil & Energy stock trades thinly on the Frankfurt venue, so isolated stale quotes can inflate its weekly volatility.
 - The ETFs are hypothetical baskets, not traded funds. For educational purposes only; this is not investment advice.
+
+## Legal Disclaimer
+
+The information provided [on this platform / in this document] is for informational and educational purposes only and does not constitute general or personal investment advice, a personal recommendation, or an offer or solicitation to buy or sell any financial instruments.
+
+This content has not been prepared in accordance with legal requirements designed to promote the independence of investment research. It does not take into account the specific investment objectives, financial situation, or particular needs of any individual recipient.
+
+Any investment service or financial instrument mentioned may not be suitable for all investors. Accordingly, no representation or warranty, express or implied, is made as to the accuracy or completeness of the information, and any decision to invest is made solely at the user's risk. Within the meaning of Directive 2014/65/EU (MiFID II), this content is deemed generic information or marketing communication and does not establish a fiduciary or advisory relationship.
+
