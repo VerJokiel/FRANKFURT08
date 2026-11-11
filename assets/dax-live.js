@@ -151,6 +151,13 @@
       const firstBars = open ? new Date(+open + 20 * 60000) : null;
       next = firstBars ? `Next live update ${S.when(firstBars, now)} Frankfurt time (${S.inTime(firstBars, now)}), when the first bars after the 09:00 open arrive.` : '';
     }
+    const shortNext = kind === 'live'
+      ? (((now - new Date(+published + CRON_MIN * 60000)) / 60000 > LATE_MIN - CRON_MIN)
+        ? 'next update overdue, checking every 30 s'
+        : `next ≈ ${clock(new Date(+published + CRON_MIN * 60000))} (${S.inTime(new Date(+published + CRON_MIN * 60000), now)})`)
+      : (() => { const o = S.nextOpen(now); return o ? `session closed, next bars ${S.when(new Date(+o + 20 * 60000), now)}` : 'session closed'; })();
+    DD.stamp({ lastBar, active: kind === 'live', next: shortNext, nextShort: shortNext,
+      sessionLabel: L.session === berlinDay.format(now) ? '' : dayLabel(L.session), corrIntraday: !!windowKey && !windowKey.startsWith('d') });
     setStatus(kind, kind === 'live'
       ? `Latest 5-minute bar ${clock(lastBar)} Frankfurt time (source delay about 15 min), published ${clock(published)}.`
       : `Showing the session of ${dayLabel(L.session)}, last bar ${clock(lastBar)} Frankfurt time.`);
@@ -261,7 +268,8 @@
     $('dx-corr-note').textContent = `Pearson correlation of ${w.note}: ${C.n} returns per stock.${stamp}`;
     summary();
     drawMatrix(); drawNet(); updateCy();
-    if (fromNewData && !reduced) ['dx-matrix-card', 'dx-net-card', 'dx-cy-card'].forEach((id) => { const n = $(id); n.classList.remove('dx-flash'); void n.offsetWidth; n.classList.add('dx-flash'); });
+    if (fromNewData && !reduced) document.querySelectorAll('#page-dax .card[data-feed]:not([data-feed="ecb"])').forEach((n) => { n.classList.remove('dx-flash'); void n.offsetWidth; n.classList.add('dx-flash'); });
+    if (!fromNewData) describeStatus(null);   // window changed: corr panels switch between live and daily wording
   }
   const f2 = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
   function summary() {

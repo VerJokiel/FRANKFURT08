@@ -427,8 +427,46 @@
     if (fx) lineChart($('dx-fx'), [{ name: 'EUR/USD', color: cssVar('--fg'), points: fx }], { yFmt: d3.format('.2f'), yTip: d3.format('.4f'), height: 220 });
   }
 
+  /* ---------- per-panel update lines ----------
+     Every element with data-feed gets a line saying what data it shows and when it next changes.
+     live  = today's 5-minute bars;  mixed = daily closes plus today's latest bar;
+     corr  = live or mixed depending on the correlation window;  ecb = ECB Data Portal series.
+     assets/dax-live.js calls DaxDaily.stamp(info) every 15 s and on each new bar. */
+  let liveInfo = null;
+  const ecbLast = (() => { const ds = Object.values(D.macro || {}).map((m) => m.dates[m.dates.length - 1]).sort(); return ds.length ? ds[ds.length - 1] : null; })();
+  function freshText(feed) {
+    const now = new Date(), daily = Schedule.nextDailyJob(now);
+    const dailyNext = daily ? `official close ${Schedule.when(daily, now)}` : '';
+    const li = liveInfo && liveInfo.lastBar ? liveInfo : null;
+    const closes = `Daily closes to ${fmtDay(parse(D.asof))}`;
+    if (feed === 'corr') feed = li && liveInfo.corrIntraday ? 'live' : 'mixed';
+    if (feed === 'ecb') return { live: false, text: ecbLast ? `ECB data to ${fmtDay(parse(ecbLast))} · fetched with the daily job, next ${Schedule.when(daily, now)}` : 'No ECB data in this update' };
+    if (feed === 'live') return li
+      ? { live: li.active, text: `5-minute bar ${fmtClock(li.lastBar)}${li.sessionLabel ? ' (' + li.sessionLabel + ')' : ''} · ${li.next}` }
+      : { live: false, text: 'Waiting for the first 5-minute bars' };
+    // mixed
+    if (li && M.provisional) return { live: li.active, text: `${closes} + today's bar ${fmtClock(li.lastBar)} · ${li.next} · ${dailyNext}` };
+    return { live: false, text: `${closes} · next ${dailyNext}${li && li.nextShort ? ' · intraday: ' + li.nextShort : ''}` };
+  }
+  function stamp(info) {
+    if (info !== undefined) liveInfo = info;
+    document.querySelectorAll('#page-dax [data-feed]').forEach((node) => {
+      let p = node;
+      if (!node.classList.contains('dx-fresh')) {
+        p = node.querySelector(':scope > .dx-fresh');
+        if (!p) {
+          p = el('p', { className: 'dx-fresh' });
+          const h = node.querySelector(':scope > h2'); if (h) h.after(p); else node.prepend(p);
+        }
+      }
+      const t = freshText(node.dataset.feed);
+      p.classList.toggle('is-live', !!t.live);
+      p.textContent = t.text;
+    });
+  }
+
   /* ---------- wiring ---------- */
-  function renderLive() { drawFreshness(); drawStats(); drawMap(); drawMovers(); drawInternals(); drawSectors(); drawCharts(); }
+  function renderLive() { drawFreshness(); drawStats(); drawMap(); drawMovers(); drawInternals(); drawSectors(); drawCharts(); stamp(); }
   document.querySelectorAll('#dx-period button').forEach((b) => b.addEventListener('click', () => {
     period = b.dataset.p;
     document.querySelectorAll('#dx-period button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
@@ -444,5 +482,6 @@
     get model() { return M; },
     /* live = {session, prev_date, lastTime, last:{tk: price}, prev_close:{tk: price}} */
     applyLive(live) { M = buildModel(live); renderLive(); return !!M.provisional; },
+    stamp,
   };
 })();
