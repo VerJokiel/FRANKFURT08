@@ -29,6 +29,7 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
+from datetime import time as dtime
 from pathlib import Path
 
 import numpy as np
@@ -232,6 +233,12 @@ def main() -> None:
                 sources.setdefault("fallback", "Stooq CSV")
     if not len(close):
         raise SystemExit("No price data from Yahoo or Stooq; keeping the existing data file.")
+    # a run during trading hours returns today's running price; keep only finished sessions
+    now = pd.Timestamp.now(tz="Europe/Berlin")
+    close = close.sort_index()
+    if close.index[-1].date() == now.date() and now.time() < dtime(17, 45):
+        log(f"dropping unfinished session {now.date()} (run at {now:%H:%M} Frankfurt time)")
+        close = close.iloc[:-1]
 
     caps = market_caps()
     macro = fetch_ecb(start)
