@@ -150,7 +150,7 @@
   }
 
   /* ---------- state ---------- */
-  const state = { tab: 'overview', selected: null, sortKey: 'sector', sortDir: 1, win: '1Y', freq: 'daily', level: 'stocks',
+  const state = { tab: 'overview', selected: null, sortKey: 'sector', sortDir: 1, win: '1Y', freq: 'daily', level: 'stocks', heatRes: 'month',
     pair: { stocks: [IDS[0], IDS[1]], etfs: [ETF_IDS[0], ETF_IDS[2]] } };
 
   /* ---------- helpers ---------- */
@@ -196,6 +196,10 @@
     for (const t of ticks) {
       g.append('line').attr('x1', left).attr('x2', W - right).attr('y1', y(t)).attr('y2', y(t)).attr('stroke', 'var(--grid)');
       g.append('text').attr('class', 'tick').attr('x', left - 6).attr('y', y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').text(o.yFmt(t));
+    }
+    if (o.bands) for (const bd of o.bands) {
+      const y0 = y(Math.min(bd.to, y.domain()[1])), y1 = y(Math.max(bd.from, y.domain()[0])); if (y1 <= y0) continue;
+      g.insert('rect', ':first-child').attr('x', left).attr('width', W - right - left).attr('y', y0).attr('height', y1 - y0).attr('fill', bd.color).attr('fill-opacity', 0.16);
     }
     if (o.refY != null && o.refY > y.domain()[0] && o.refY < y.domain()[1])
       g.append('line').attr('x1', left).attr('x2', W - right).attr('y1', y(o.refY)).attr('y2', y(o.refY)).attr('stroke', 'var(--ref)').attr('stroke-dasharray', '4 3');
@@ -256,6 +260,12 @@
 
   const inkFor = (rgb) => { const c = d3.rgb(rgb); return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255 > 0.55 ? '#1a1a1a' : '#ffffff'; };
 
+  /* correlation colours: green = moves independently (diversifies), yellow = moderate, red = moves together */
+  const CORR_STOPS = [[-0.3, '#1a9850'], [0, '#66bd63'], [0.3, '#fee08b'], [0.55, '#f46d43'], [0.8, '#d73027']];
+  const corrColor = d3.scaleLinear(CORR_STOPS.map((d) => d[0]), CORR_STOPS.map((d) => d[1])).interpolate(d3.interpolateRgb).clamp(true);
+  /* volatility colours: green = calm, yellow = typical, red = turbulent (RdYlGn, reversed) */
+  const volRamp = (t) => d3.interpolateRdYlGn(1 - t);
+
   /* generic correlation matrix */
   function drawMatrix(box, ids, C, opts = {}) {
     const card = box.closest('.card');
@@ -269,8 +279,7 @@
     const svg = d3.select(box).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
     const x = d3.scaleBand(ids, [left, left + cell * ids.length]).paddingInner(0.06);
     const y = d3.scaleBand(ids, [top, top + cell * ids.length]).paddingInner(0.06);
-    const neg = cssVar('--neg'), zero = cssVar('--bg'), posC = cssVar('--pos');
-    const f = d3.scaleLinear([-1, 0, 1], [neg, zero, posC]).interpolate(d3.interpolateRgb).clamp(true);
+    const f = corrColor;
     for (const t of ids) {
       svg.append('text').attr('class', 'tick').attr('x', left - 6).attr('y', y(t) + y.bandwidth() / 2).attr('dy', '0.32em').attr('text-anchor', 'end').style('fill', colorOf(t)).text(lab(t));
       svg.append('text').attr('class', 'tick').attr('x', x(t) + x.bandwidth() / 2).attr('y', top - 8).attr('text-anchor', 'middle').style('fill', colorOf(t)).text(code(t));
@@ -295,11 +304,13 @@
       showTip(card, event, opts.head || '', [{ name: byId[d.a].name + ' × ' + byId[d.b].name, value: f2(d.rho) }, { name: 'Observations', value: String(d.obs) }]);
     }).on('pointerleave', () => hideTip(card))
       .on('click', (event, d) => { if (d.a !== d.b && opts.onPick) opts.onPick(ids.indexOf(d.a) < ids.indexOf(d.b) ? [d.a, d.b] : [d.b, d.a]); });
-    return { neg, zero, posC };
+    return { stops: CORR_STOPS };
   }
   function legend(target, c) {
-    const ramp = el('span', { className: 'ramp' }); ramp.style.background = `linear-gradient(90deg, ${c.neg}, ${c.zero}, ${c.posC})`;
-    document.getElementById(target).replaceChildren(el('span', { textContent: '−1' }), ramp, el('span', { textContent: '+1' }));
+    const lo = c.stops[0][0], hi = c.stops[c.stops.length - 1][0];
+    const ramp = el('span', { className: 'ramp' });
+    ramp.style.background = `linear-gradient(90deg, ${c.stops.map(([v, col]) => `${col} ${((v - lo) / (hi - lo) * 100).toFixed(0)}%`).join(', ')})`;
+    document.getElementById(target).replaceChildren(el('span', { textContent: 'independent ≤ −0.3' }), ramp, el('span', { textContent: '0.8+ together' }));
   }
 
   /* ---------- overview ---------- */
@@ -448,41 +459,81 @@
     })), { yFmt: pct0, yTip: pct, head: (d) => 'Week ending ' + fmtDay(d) });
   }
 
+  /* volatility heatmap: one row per stock and pillar ETF, one column per month (or week),
+     green = calm, red = turbulent, relative to the whole table (10th to 90th percentile) */
+  const monthlyVol = (() => {
+    const g = new Map();
+    for (const x of returns) {
+      const k = x.date.slice(0, 7) + '|' + x.id;
+      if (!g.has(k)) g.set(k, { period: x.date.slice(0, 7), id: x.id, rs: [] });
+      g.get(k).rs.push(x.r);
+    }
+    const out = [];
+    for (const o of g.values()) {
+      const n = o.rs.length; if (n < 8) continue;   // skip months with fewer than 8 trading days
+      const s = d3.sum(o.rs), m = s / n;
+      out.push({ period: o.period, id: o.id, vol: Math.sqrt(d3.sum(o.rs, (b) => (b - m) ** 2) / (n - 1) * 252), ret: Math.exp(s) - 1, days: n });
+    }
+    return out;
+  })();
   function drawHeat() {
     const box = document.getElementById('vol-heat'); const card = box.closest('.card');
     box.replaceChildren();
     const W = box.clientWidth; if (!W) return;
+    const monthly = state.heatRes !== 'week';
+    document.querySelectorAll('#heat-seg button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.r === 'week') !== monthly)));
     const rowsIds = [];
     for (const sec of SECTORS) { rowsIds.push(...STOCKS.filter((s) => s.sector === sec).map((s) => s.id)); rowsIds.push(ETFS.find((e) => e.sector === sec).id); }
-    const V = weeklyVol.filter((r) => rowsIds.includes(r.id));
-    const wks = [...new Set(V.map((r) => r.week))].sort();
+    const V = (monthly ? monthlyVol : weeklyVol.map((r) => ({ ...r, period: r.week }))).filter((r) => rowsIds.includes(r.id));
+    const cols = [...new Set(V.map((r) => r.period))].sort();
+    const avg = new Map(rowsIds.map((id) => [id, d3.mean(V.filter((r) => r.id === id), (r) => r.vol)]));
+    const sorted = V.map((r) => r.vol).sort(d3.ascending);
+    const lo = d3.quantile(sorted, 0.1), mid = d3.quantile(sorted, 0.5), hi = d3.quantile(sorted, 0.9);
+    const col = (v) => volRamp(Math.max(0, Math.min(1, v <= mid ? 0.5 * (v - lo) / (mid - lo) : 0.5 + 0.5 * (v - mid) / (hi - mid))));
     const hn = W < 520;
     const rowLab = (id) => (hn ? (byId[id].etf ? code(id) + ' ETF' : code(id)) : byId[id].name);
-    const rowH = hn ? 20 : 24, top = 4, H = top + rowH * rowsIds.length + 26;
+    const rowH = monthly ? (hn ? 24 : 30) : (hn ? 18 : 22), top = 4, gapAfterEtf = 8;
+    const yPos = new Map(); let yy = top;
+    rowsIds.forEach((id) => { yPos.set(id, yy); yy += rowH + (byId[id].etf ? gapAfterEtf : 0); });
+    const H = yy + 24;
     const svg = d3.select(box).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
     const left = d3.max(rowsIds, (id) => measure(svg, rowLab(id))) + 12;
-    const x = d3.scaleBand(wks, [left, W - 4]).paddingInner(0.08);
-    const y = d3.scaleBand(rowsIds, [top, top + rowH * rowsIds.length]).paddingInner(0.12);
-    const vmax = d3.quantile(V.map((r) => r.vol).sort(d3.ascending), 0.98) || 1;
-    const lo = cssVar('--bg'), mid = cssVar('--banking'), hi = cssVar('--hot');
-    const col = d3.scaleLinear([0, vmax * 0.55, vmax], [lo, mid, hi]).interpolate(d3.interpolateRgb).clamp(true);
-    for (const id of rowsIds) svg.append('text').attr('class', 'tick').attr('x', left - 8).attr('y', y(id) + y.bandwidth() / 2).attr('dy', '0.32em').attr('text-anchor', 'end')
+    const avgW = hn ? 34 : 46;
+    const x = d3.scaleBand(cols, [left, W - avgW - 8]).paddingInner(monthly ? 0.06 : 0.1);
+    const cellH = rowH - 3, showText = monthly && x.bandwidth() >= 24;
+    for (const id of rowsIds) svg.append('text').attr('class', 'tick').attr('x', left - 8).attr('y', yPos.get(id) + cellH / 2).attr('dy', '0.32em').attr('text-anchor', 'end')
       .style('font-weight', byId[id].etf ? 600 : null).style('fill', byId[id].etf ? 'var(--fg)' : null).text(rowLab(id));
-    rowsIds.forEach((id, i) => { if (i && byId[rowsIds[i - 1]].etf) svg.append('line').attr('x1', 0).attr('x2', W).attr('y1', y(id) - y.step() * 0.06).attr('y2', y(id) - y.step() * 0.06).attr('stroke', 'var(--line)'); });
-    svg.append('g').selectAll('rect').data(V).join('rect')
-      .attr('x', (d) => x(d.week)).attr('y', (d) => y(d.id)).attr('width', x.bandwidth()).attr('height', y.bandwidth())
-      .attr('rx', Math.min(2, x.bandwidth() / 2)).attr('fill', (d) => col(d.vol))
-      .on('pointermove pointerdown', (event, d) => showTip(card, event, 'Week ending ' + fmtDay(parse(d.week_end)), [
-        { name: byId[d.id].name, value: pct(d.vol) }, { name: 'Week return', value: signedPct(d.ret) }, { name: 'Trading days', value: String(d.days) }]))
+    const tipFor = (d) => [{ name: byId[d.id].name, value: pct(d.vol) + ' annualised' }, { name: monthly ? 'Month return' : 'Week return', value: signedPct(d.ret) }, { name: 'Trading days', value: String(d.days) },
+      { name: 'Its 2-year average', value: pct(avg.get(d.id)) }];
+    const g = svg.append('g').selectAll('g').data(V).join('g').attr('transform', (d) => `translate(${x(d.period)},${yPos.get(d.id)})`);
+    g.append('rect').attr('width', x.bandwidth()).attr('height', cellH).attr('rx', Math.min(3, x.bandwidth() / 3)).attr('fill', (d) => col(d.vol));
+    if (showText) g.append('text').attr('x', x.bandwidth() / 2).attr('y', cellH / 2).attr('dy', '0.34em').attr('text-anchor', 'middle')
+      .style('font-size', x.bandwidth() >= 34 ? '11px' : '9.5px').style('font-variant-numeric', 'tabular-nums').style('pointer-events', 'none')
+      .style('fill', (d) => inkFor(col(d.vol))).text((d) => Math.round(d.vol * 100));
+    g.on('pointermove pointerdown', (event, d) => showTip(card, event, monthly ? d3.utcFormat('%B %Y')(parse(d.period + '-01')) : 'Week ending ' + fmtDay(parse(d.week_end)), tipFor(d)))
       .on('pointerleave', () => hideTip(card));
-    const months = wks.filter((w, i) => i === 0 || w.slice(0, 7) !== wks[i - 1].slice(0, 7));
-    const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((W - left) / 70))));
-    months.forEach((w, i) => {
-      if (i % step) return; const px = x(w) + x.bandwidth() / 2; if (px > W - 40) return;
-      svg.append('text').attr('class', 'tick').attr('x', px).attr('y', H - 8).text(d3.utcFormat('%b %y')(parse(w)));
+    // average column
+    const ax = W - avgW - 2;
+    svg.append('text').attr('class', 'tick').attr('x', ax + avgW / 2).attr('y', H - 8).attr('text-anchor', 'middle').style('font-weight', 600).text('Avg');
+    for (const id of rowsIds) {
+      const v = avg.get(id), y0 = yPos.get(id);
+      svg.append('rect').attr('x', ax).attr('y', y0).attr('width', avgW).attr('height', cellH).attr('rx', 3).attr('fill', col(v)).attr('stroke', 'var(--fg)').attr('stroke-opacity', 0.35);
+      svg.append('text').attr('x', ax + avgW / 2).attr('y', y0 + cellH / 2).attr('dy', '0.34em').attr('text-anchor', 'middle').style('font-size', '11px').style('font-weight', 600)
+        .style('font-variant-numeric', 'tabular-nums').style('fill', inkFor(col(v))).text(Math.round(v * 100));
+    }
+    // x labels: every month (or every month start in weekly view), with the year on January and the first column
+    const starts = cols.filter((c, i) => i === 0 || c.slice(0, 7) !== cols[i - 1].slice(0, 7));
+    const step = Math.max(1, Math.ceil(starts.length / Math.max(2, Math.floor((W - left - avgW) / (monthly ? 46 : 56)))));
+    starts.forEach((c, i) => {
+      if (i % step) return; const d = parse(c.slice(0, 7) + '-01');
+      svg.append('text').attr('class', 'tick').attr('x', x(c) + (monthly ? x.bandwidth() / 2 : 0)).attr('y', H - 8).attr('text-anchor', monthly ? 'middle' : 'start')
+        .text(d3.utcFormat(i === 0 || d.getUTCMonth() === 0 ? "%b %y" : '%b')(d));
     });
-    const ramp = el('span', { className: 'ramp' }); ramp.style.background = `linear-gradient(90deg, ${lo}, ${mid}, ${hi})`;
-    document.getElementById('heat-legend').replaceChildren(el('span', { textContent: '0%' }), ramp, el('span', { textContent: pct0(vmax) + '+' }));
+    const ramp = el('span', { className: 'ramp' });
+    ramp.style.background = `linear-gradient(90deg, ${d3.range(0, 1.001, 0.125).map(volRamp).join(', ')})`;
+    document.getElementById('heat-legend').replaceChildren(
+      el('span', { textContent: `calm ≤ ${pct0(lo)}` }), ramp, el('span', { textContent: `${pct0(hi)}+ turbulent` }),
+      el('span', { className: 'muted', textContent: ` · middle ${pct0(mid)} · numbers are annualised volatility in %` }));
   }
 
   function drawSectorVol() {
@@ -493,6 +544,7 @@
   }
 
   /* ---------- correlation tab ---------- */
+  document.getElementById('heat-seg').addEventListener('click', (e) => { const b = e.target.closest('button[data-r]'); if (b) { state.heatRes = b.dataset.r; drawHeat(); } });
   document.getElementById('level-seg').addEventListener('click', (e) => { const b = e.target.closest('button[data-l]'); if (b) { state.level = b.dataset.l; drawCorr(); drawRoll(); } });
   document.getElementById('win-seg').addEventListener('click', (e) => { const b = e.target.closest('button[data-w]'); if (b) { state.win = b.dataset.w; drawCorr(); } });
   document.getElementById('freq-seg').addEventListener('click', (e) => { const b = e.target.closest('button[data-f]'); if (b) { state.freq = b.dataset.f; drawCorr(); } });
@@ -511,14 +563,44 @@
       stat('Between pillar ETFs', f2(etfCorr(state.win, state.freq)), 'avg correlation', null, true),
       stat('Stocks across pillars', f2(gc['Across pillars']), 'avg correlation'),
       ...SECTORS.map((s) => stat('Within ' + s, f2(gc[s]), 'avg stock correlation', sectorColor(s))));
+    drawPairLists(ids, corrMatrix(state.win, state.freq, ids));
+  }
+
+  /* right panel: the pairs that move together most and least, for the selected window */
+  function drawPairLists(ids, C) {
+    const pairs = C.filter((d) => ids.indexOf(d.a) < ids.indexOf(d.b) && d.rho != null).sort((p, q) => q.rho - p.rho);
+    const few = pairs.length <= 6;
+    const item = (d) => {
+      const li = el('li'), b = el('button', { type: 'button', className: 'pair-btn' });
+      const sel = state.pair[state.level]; if (sel[0] === d.a && sel[1] === d.b) b.setAttribute('aria-current', 'true');
+      const v = el('span', { className: 'pair-v', textContent: f2(d.rho) }); v.style.background = corrColor(d.rho); v.style.color = inkFor(corrColor(d.rho));
+      b.append(v, el('span', { textContent: shortName(d.a) + ' × ' + shortName(d.b) }));
+      b.addEventListener('click', () => { state.pair[state.level] = [d.a, d.b]; drawCorr(); drawRoll(); });
+      li.appendChild(b); return li;
+    };
+    document.getElementById('pairs-hi-label').textContent = few ? 'All pairs, highest first' : 'Move together most';
+    document.getElementById('pairs-hi').replaceChildren(...(few ? pairs : pairs.slice(0, 5)).map(item));
+    document.getElementById('pairs-lo-wrap').hidden = few;
+    if (!few) document.getElementById('pairs-lo').replaceChildren(...pairs.slice(-5).reverse().map(item));
+    document.getElementById('pairs-note').textContent = `${state.win} window, ${state.freq} returns. Click a pair to chart it above.`;
   }
 
   function drawRoll() {
     const [a, b] = state.pair[state.level];
     document.getElementById('roll-title').textContent = 'Rolling correlation: ' + byId[a].name + ' × ' + byId[b].name;
     const p = rolling(a, b);
-    lineChart(document.getElementById('corr-roll'), [{ name: 'Correlation', color: cssVar('--fg'), points: p }],
-      { yFmt: d3.format('.1f'), yTip: d3.format('.2f'), yDomain: [Math.min(-0.2, d3.min(p, (d) => d.y) ?? 0), 1], refY: 0, head: (d) => '63 days to ' + fmtDay(d) });
+    const ymin = Math.min(-0.2, d3.min(p, (d) => d.y) ?? 0);
+    lineChart(document.getElementById('corr-roll'), [{ name: 'Correlation', color: '#f3efe6', points: p, width: 2.2 }],
+      { yFmt: d3.format('.1f'), yTip: d3.format('.2f'), yDomain: [ymin, 1], refY: 0, head: (d) => '63 days to ' + fmtDay(d), height: 260,
+        bands: [{ from: ymin, to: 0.3, color: '#66bd63' }, { from: 0.3, to: 0.55, color: '#fee08b' }, { from: 0.55, to: 1, color: '#f46d43' }] });
+    const cur = corrMatrix(state.win, state.freq, state.level === 'stocks' ? IDS : ETF_IDS).find((d) => d.a === a && d.b === b);
+    const ys = p.map((d) => d.y), last = ys[ys.length - 1];
+    const tag = (v) => (v == null ? '' : v < 0.3 ? 'diversifying' : v < 0.55 ? 'moderate' : 'moving together');
+    document.getElementById('pair-stats').replaceChildren(
+      stat('Last 3 months', f2(last), tag(last), last == null ? null : corrColor(last), true),
+      stat(`${state.win} ${state.freq}`, f2(cur && cur.rho), tag(cur && cur.rho), cur && cur.rho != null ? corrColor(cur.rho) : null),
+      stat('Range, 3-month windows', ys.length ? `${f2(d3.min(ys))} – ${f2(d3.max(ys))}` : '–', 'lowest to highest'),
+      stat('Average', f2(d3.mean(ys)), 'of all 3-month windows'));
   }
 
   /* ---------- shared toolkit for other tabs (assets/risk.js) ---------- */

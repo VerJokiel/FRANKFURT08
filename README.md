@@ -119,6 +119,7 @@ python python/longterm_risk.py --crises                                         
 - **Weekly volatility:** standard deviation of a week's daily log returns × √252 (annualised). Weeks with fewer than three trading days are excluded.
 - **Correlation:** Pearson correlation over the selected window using all dates where both series traded. Pillar averages are the mean of all pairwise correlations in that group.
 - **Rolling correlation:** 63-trading-day window, sampled every 5 trading days.
+- **Colour scales:** the volatility heatmap runs green (calm) → yellow → red (turbulent), scaled to the 10th–90th percentile of all cells; correlation matrices and pair lists run green (independent, ≤ 0) → yellow (≈ 0.3) → red (moves together, ≥ 0.8).
 - **Design:** two palettes defined as CSS variables in `assets/style.css`. Analysis tabs use deep midnight navy (#13233F) and forest sage (#3E5F44) panels with warm alabaster (#F3EFE6) and gold (#C9A55A) accents. The two risk tabs use light fintech panels with teal (#24BDC8), so risk metrics stand apart at a glance. Headings are set in Newsreader and body text in Inter.
 
 ## Run it

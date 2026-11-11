@@ -279,7 +279,8 @@
       </div>
       <div class="card wide" id="card-vol-heat">
         <h2>Volatility heatmap</h2>
-        <p class="note">Each cell is one week; darker and redder means more volatile. Spikes rarely line up across pillars, and the ETF rows are calmer than their members.</p>
+        <p class="note">Annualised volatility of daily returns, one row per stock with its pillar ETF underneath. Green is calm, red is turbulent, compared across the whole table; the last column is each row's two-year average. Spikes rarely line up across pillars, and the ETF rows are calmer than their members.</p>
+        <div class="controls"><span class="label">Each cell is one</span><div class="seg" id="heat-seg"><button data-r="month" aria-pressed="true">Month</button><button data-r="week" aria-pressed="false">Week</button></div></div>
         <div class="box box-heat" id="vol-heat"></div>
         <div class="legend" id="heat-legend"></div>
       </div>
@@ -296,7 +297,7 @@
     <div class="grid">
       <div class="card" id="card-corr">
         <h2>Correlation of returns</h2>
-        <p class="note">Pearson correlation of log returns. In the stock view, the outlined blocks are the pillars; the pale areas between them are the diversification. Click a cell to see how that pair has moved.</p>
+        <p class="note">Pearson correlation of log returns. Green means the pair moves independently and diversifies, yellow is moderate, red means it moves together. In the stock view the outlined blocks are the pillars; the green areas between them are the diversification. Click a cell to see how that pair has moved.</p>
         <div class="controls">
           <span class="label">View</span>
           <div class="seg" id="level-seg"><button data-l="stocks">Stocks</button><button data-l="etfs">Pillar ETFs</button></div>
@@ -311,13 +312,19 @@
       </div>
       <div class="card green" id="card-roll">
         <h2 id="roll-title">Rolling correlation</h2>
-        <p class="note">63-trading-day (≈3-month) correlation of daily returns, sampled weekly.</p>
+        <p class="note">63-trading-day (≈3-month) correlation of daily returns, sampled weekly. Shaded bands: green below 0.3 (diversifying), yellow 0.3–0.55, red above 0.55 (moving together).</p>
         <div class="box" id="corr-roll"></div>
+        <div class="stats pair-stats" id="pair-stats"></div>
+        <h3 class="pair-h">Pairs at a glance</h3>
+        <p class="note" id="pairs-note"></p>
+        <div class="pair-lists">
+          <div><div class="label" id="pairs-hi-label">Move together most</div><ol class="pair-list" id="pairs-hi"></ol></div>
+          <div id="pairs-lo-wrap"><div class="label">Most independent</div><ol class="pair-list" id="pairs-lo"></ol></div>
+        </div>
       </div>
     </div>
   </section>
 
-   <!-- hre also adjust the colorst in the correlation heatmap - to green and red as the are completely non - infomratiove in the currnt setting-->
 
   <!-- SHORT-TERM RISK (layer 1) -->
   <section class="page theme-b" id="page-risk" hidden>
