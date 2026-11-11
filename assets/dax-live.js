@@ -41,7 +41,7 @@
   let lastGenerated = null;
   let windowKey = null;    // correlation window
   let userPicked = false;  // the viewer chose a window themselves
-  let netMode = 'mst', thr = 0.4, cyCut = 0.3;
+  let netMode = 'mst', thr = 0.3, cyCut = 'top12';
   let C = null;            // current correlation result
   const MEM = DD.members;
   const ORDER = MEM.map((m, j) => j).sort((a, b) => DD.sectors.indexOf(MEM[a].sector) - DD.sectors.indexOf(MEM[b].sector) || MEM[b].weight - MEM[a].weight);
@@ -350,12 +350,17 @@
   }
   function avgP(a, b) { let s = 0, n = 0; for (const i of a) for (const j of b) if (i !== j && C.P[i][j] != null) { s += C.P[i][j]; n++; } return n ? s / n : null; }
   function cyEdges(us) {
-    const out = [];
+    const all = [];
     for (let a = 0; a < us.length; a++) for (let b = a + 1; b < us.length; b++) {
       const w = avgP(us[a].mem, us[b].mem);
-      if (w != null && w >= cyCut) out.push({ group: 'edges', data: { id: 'e:' + us[a].id + '|' + us[b].id, source: us[a].id, target: us[b].id, w, lbl: w.toFixed(2), wd: 0.6 + 7 * (w - cyCut + 0.05), op: Math.min(0.9, 0.3 + w * 0.7) } });
+      if (w != null) all.push([a, b, w]);
     }
-    return out;
+    // 'top12' keeps the 12 strongest links whatever the level, so the view stays readable in calm and stressed markets
+    const cut = cyCut === 'top12' ? (all.map((e) => e[2]).sort((x, y) => y - x)[11] ?? -1) : +cyCut;
+    const ws = all.map((e) => e[2]), lo = Math.min(cut, d3.max(ws) ?? 0), span = Math.max(0.05, (d3.max(ws) ?? 1) - lo);
+    return all.filter((e) => e[2] >= cut).map(([a, b, w]) => ({ group: 'edges', data: {
+      id: 'e:' + us[a].id + '|' + us[b].id, source: us[a].id, target: us[b].id, w, lbl: w.toFixed(2),
+      wd: 0.8 + 6 * (w - lo) / span, op: Math.min(0.9, 0.35 + 0.55 * (w - lo) / span) } }));
   }
   function clusterLabel(s, mem) { const ic = avgP(mem, mem); const w = d3.sum(mem, (i) => MEM[i].weight); return `${s}\n${mem.length} · ρ̄ ${ic == null ? '–' : ic.toFixed(2)} · ${(w * 100).toFixed(0)}%`; }
   function rebuildCy() {
@@ -391,7 +396,7 @@
     cy.elements().remove(); cy.add(els.concat(cyEdges(us)));
     const fresh = Object.keys(posMem).length === 0;
     cy.layout({ name: 'cose', animate: !reduced && !fresh, animationDuration: 450, randomize: fresh, nodeRepulsion: () => 9000,
-      idealEdgeLength: (e) => 60 + 160 * (1 - e.data('w')), edgeElasticity: (e) => 40 + 200 * e.data('w'), nestingFactor: 1.1, gravity: 0.35, numIter: 1200, fit: true, padding: 24 }).run();
+      idealEdgeLength: (e) => 60 + 160 * (1 - Math.max(0, e.data('w'))), edgeElasticity: (e) => 40 + 200 * Math.max(0, e.data('w')), nestingFactor: 1.1, gravity: 0.35, numIter: 1200, fit: true, padding: 24 }).run();
   }
   function updateCy() {
     if (!cy) { rebuildCy(); return; }
@@ -420,7 +425,7 @@
   $('dx-mst').addEventListener('click', () => segNet('mst'));
   $('dx-thr-btn').addEventListener('click', () => segNet('thr'));
   $('dx-thr').addEventListener('input', (e) => { thr = +e.target.value; $('dx-thr-v').textContent = thr.toFixed(2); if (netMode !== 'mst') drawNet(); });
-  $('dx-cy-cut').addEventListener('change', (e) => { cyCut = +e.target.value; updateCy(); });
+  $('dx-cy-cut').addEventListener('change', (e) => { cyCut = e.target.value; updateCy(); });
   $('dx-cy-all').addEventListener('click', () => { DD.sectors.forEach((_, k) => expanded.add(k)); rebuildCy(); });
   $('dx-cy-none').addEventListener('click', () => { expanded.clear(); rebuildCy(); });
   $('dx-cy-lay').addEventListener('click', () => { Object.keys(posMem).forEach((k) => delete posMem[k]); rebuildCy(); });
