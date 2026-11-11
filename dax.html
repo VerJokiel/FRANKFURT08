@@ -38,11 +38,62 @@
     </div>
 
     <div data-needs-data>
+      <div class="dx-live-bar" role="status" aria-live="polite"><span class="dx-pill waiting" id="dx-live-pill">Waiting for data</span><span id="dx-live-text"></span></div>
       <p class="note" id="dx-asof"></p>
+      <p class="note" id="dx-live-note"></p>
       <p class="dx-alert" id="dx-stale" hidden></p>
       <p class="dx-alert" id="dx-missing" hidden></p>
       <div class="stats" id="dx-stats"></div>
       <p class="dx-read" id="dx-read"></p>
+
+      <div class="card" id="dx-intraday-card" hidden style="margin-top:16px">
+        <h2 id="dx-intraday-title">Today's session</h2>
+        <p class="note" id="dx-intraday-sub"></p>
+        <div class="dx-canvas"><canvas id="dx-intraday" aria-label="DAX in 5-minute steps with the share of members above their previous close"></canvas></div>
+      </div>
+
+      <h2 class="section-title">Correlation, updated with every bar</h2>
+      <div class="card">
+        <div class="controls">
+          <span class="label">Returns</span>
+          <div class="seg" id="dx-cwin" role="group" aria-label="Correlation window">
+            <button type="button" data-w="today5" aria-pressed="false">Today, 5-min</button>
+            <button type="button" data-w="week5" aria-pressed="false">5 sessions, 5-min</button>
+            <button type="button" data-w="week30" aria-pressed="false">5 sessions, 30-min</button>
+            <button type="button" data-w="d63" aria-pressed="true">3 months, daily</button>
+            <button type="button" data-w="d252" aria-pressed="false">1 year, daily</button>
+          </div>
+        </div>
+        <p class="note" id="dx-corr-note"></p>
+        <p class="dx-sum" id="dx-corr-sum"></p>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <div class="card wide" id="dx-matrix-card">
+          <h2>Correlation matrix</h2>
+          <p class="note">All 40 members ordered by sector. Hover a cell for the pair.</p>
+          <div class="tablewrap"><div class="dx-matrix-box"><canvas id="dx-matrix" aria-label="40 by 40 correlation heatmap"></canvas></div></div>
+          <div class="legend" id="dx-matrix-scale"></div>
+        </div>
+        <div class="card" id="dx-net-card">
+          <h2>Correlation network</h2>
+          <p class="note">Stocks sized by index weight. The spanning tree keeps the 39 strongest links that connect everything (distance √(2(1−ρ))); the threshold view shows every pair above a level. Drag to rearrange.</p>
+          <div class="controls">
+            <div class="seg" role="group" aria-label="Network links"><button type="button" id="dx-mst" aria-pressed="true">Spanning tree</button><button type="button" id="dx-thr-btn" aria-pressed="false">Threshold</button></div>
+            <label class="label" for="dx-thr">ρ ≥ <span id="dx-thr-v">0.40</span></label><input id="dx-thr" type="range" min="0.1" max="0.8" step="0.05" value="0.4">
+          </div>
+          <div id="dx-net"><svg viewBox="0 0 640 480" role="img" aria-label="Force-directed correlation network"></svg><div class="tip" id="dx-net-tip" hidden></div></div>
+        </div>
+        <div class="card" id="dx-cy-card">
+          <h2>Sector clusters</h2>
+          <p class="note">Each sector shows its average internal correlation (ρ̄). Tap a sector to open it, tap its frame to close it. Edge labels are average correlations between groups.</p>
+          <div class="controls">
+            <button type="button" class="chip" id="dx-cy-all">Open all</button><button type="button" class="chip" id="dx-cy-none">Close all</button><button type="button" class="chip" id="dx-cy-lay">Re-arrange</button>
+            <label class="label" for="dx-cy-cut">Links ρ ≥</label><select id="dx-cy-cut"><option>0.20</option><option selected>0.30</option><option>0.40</option><option>0.50</option></select>
+          </div>
+          <div id="dx-cy" aria-label="Interactive sector cluster graph"></div>
+          <p class="note" id="dx-cy-info" style="margin-top:8px">Tap a stock for its correlation to its own sector and to the rest of the index.</p>
+        </div>
+      </div>
 
       <h2 class="section-title">Market map</h2>
       <div class="card">
@@ -142,7 +193,9 @@
           <li><b>Prices:</b> daily closes of the 40 DAX members on Xetra in euros and the DAX index (^GDAXI), adjusted for dividends and splits, from Yahoo Finance through the open-source <a href="https://github.com/ranaroussi/yfinance">yfinance</a> library, with <a href="https://stooq.com">Stooq</a> as a fallback. End of day only, not intraday.</li>
           <li><b>Rates and currency:</b> <a href="https://data.ecb.europa.eu">ECB Data Portal</a> API: deposit facility rate (FM), 10-year AAA yield (YC), EUR/USD reference rate (EXR).</li>
           <li><b>Weights:</b> <span id="dx-weights"></span>. The official index uses free-float market caps, so weights are close but not exact.</li>
-          <li><b>Update:</b> a GitHub Actions job runs <code>python/build_dax40.py</code> on weekdays at 18:20 UTC, after the Xetra close, and commits <code>data/dax40.js</code> when prices change. If a fetch fails, the last good data stays online.</li>
+          <li><b>Live updates:</b> during Xetra hours a GitHub Actions job (<code>live-dax40.yml</code>) fetches 5-minute bars every 5 minutes and publishes them to the <code>live-data</code> branch. This page checks for a new file every 30 seconds and recomputes everything on each new bar. Yahoo delays Xetra quotes by about 15 minutes and GitHub can start scheduled jobs a few minutes late, so live figures trail the market by roughly 15–25 minutes. Real-time Xetra prices need a paid data licence.</li>
+          <li><b>Daily update:</b> a second job runs <code>python/build_dax40.py</code> on weekdays at 18:20 UTC and commits the official closes to <code>data/dax40.js</code>. If a fetch fails, the last good data stays online.</li>
+          <li><b>Short-interval correlation:</b> 5-minute returns understate correlation because stocks do not all trade in the same seconds (the Epps effect); the 30-minute and daily windows correct for most of it.</li>
           <li><b>Metrics:</b> returns use closes 1, 5, 21 and 252 sessions back. VaR and ES are historical, from the last 252 daily DAX returns. Average correlation uses the identity Σρ<sub>ij</sub> = Var(Σz<sub>i</sub>) for standardised returns. A new 52-week high means the highest close of the last 10 sessions beats the previous 242.</li>
           <li><b>Members</b> follow the index list of 30 Oct 2026; the list in the script needs updating after each quarterly review.</li>
         </ul>
@@ -151,14 +204,18 @@
   </section>
 
   <footer>
-    <p>Data: Yahoo Finance (via yfinance), Stooq and the ECB Data Portal. End-of-day prices; nothing on this page is real-time. Index weights are approximations from market capitalisation.</p>
+    <p>Data: Yahoo Finance (via yfinance), Stooq and the ECB Data Portal. Intraday prices are 5-minute bars delayed about 15 minutes by the source; nothing on this page is real-time. Index weights are approximations from market capitalisation.</p>
     <p>For educational purposes only; not investment advice.</p>
     <p>The information provided on this page is for informational and educational purposes only and does not constitute general or personal investment advice, a personal recommendation, or an offer or solicitation to buy or sell any financial instruments. It does not take into account the specific investment objectives, financial situation, or particular needs of any individual recipient. Within the meaning of Directive 2014/65/EU (MiFID II), this content is deemed generic information or marketing communication and does not establish a fiduciary or advisory relationship.</p>
   </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
 <script src="data/dax40.js" onerror="window.DAX40 = null"></script>
 <script src="assets/dax.js"></script>
+<script src="assets/dax-live.js"></script>
 </body>
 </html>

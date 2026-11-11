@@ -369,3 +369,28 @@ footer { color: var(--slate); border-top-color: #d8d0bf; }
 .dx-method { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: .9rem; }
 .dx-method code, #dx-empty code { background: rgba(243,239,230,.1); padding: 1px 5px; border-radius: 4px; }
 @media (max-width: 600px) { .minibar { width: 4rem; } .tab-link { padding: 7px 9px; } }
+/* live layer */
+.dx-live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; font-size: .86rem; color: var(--slate); }
+.dx-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border: 1px solid #d8d0bf; background: #fff; color: var(--slate); }
+.dx-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dx-pill.live { color: #2f7a4b; border-color: #9fcfb0; }
+.dx-pill.live::before { animation: dx-pulse 1.6s ease-in-out infinite; }
+.dx-pill.closed { color: var(--navy); }
+.dx-pill.error { color: #b23a2e; border-color: #e8b4ac; }
+@keyframes dx-pulse { 50% { opacity: .25; } }
+#dx-live-note:empty, #dx-corr-sum:empty { display: none; }
+.dx-canvas { position: relative; height: 300px; }
+.dx-matrix-box { position: relative; height: 560px; min-width: 560px; }
+.dx-sum { margin: 0; font-size: .95rem; }
+.dx-sum b { color: var(--gold); font-weight: 600; }
+#dx-net { position: relative; }
+#dx-net svg { width: 100%; height: auto; display: block; touch-action: none; }
+#dx-cy { height: 440px; border: 1px dashed var(--line); border-radius: 10px; }
+.theme-a select { font: inherit; font-size: .8rem; background: rgba(243,239,230,.08); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+.theme-a select option { color: #1d1d1f; }
+.theme-a input[type=range] { accent-color: var(--gold); width: 7rem; }
+.seg button:disabled { opacity: .4; cursor: not-allowed; }
+@keyframes dx-flash { from { box-shadow: 0 0 0 2px rgba(201,165,90,.85), var(--shadow); } to { box-shadow: 0 0 0 2px rgba(201,165,90,0), var(--shadow); } }
+.theme-a .card.dx-flash { animation: dx-flash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .dx-pill.live::before, .theme-a .card.dx-flash { animation: none; } }
+@media (max-width: 600px) { .dx-canvas { height: 240px; } #dx-cy { height: 360px; } }

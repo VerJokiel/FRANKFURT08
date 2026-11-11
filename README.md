@@ -37,13 +37,15 @@ An oil price spike lifts oil producers but raises costs for industrial companies
 
 ## DAX market page (`dax.html`)
 
-A separate page, linked as **DAX market** in the tab bar, shows the current state of the German market from real end-of-day data for all 40 DAX members:
+A separate page, linked as **DAX market** in the tab bar, shows the current state of the German market for all 40 DAX members, from 5-minute bars during the session and daily closes:
 
 - **Index:** close in points and daily change, 1-month / year-to-date / 1-year return, 21-day realised volatility, distance from the 52-week high, 1-day historical VaR 99% and ES 97.5%, level against the 200-day average, drawdown.
 - **Market map:** all members sized by index weight and coloured by return over 1 day, 1 week, 1 month, year to date or 1 year, with the five biggest gainers and losers.
 - **Market internals:** advancers and decliners, share of members above their 50- and 200-day averages, new 52-week highs and lows, average pairwise correlation (3 months) and cross-sectional dispersion.
 - **Sectors:** weight, returns, volatility and internal correlation for nine sectors.
 - **Rates and currency:** ECB deposit rate, 10-year euro area AAA yield and EUR/USD.
+
+**Live updates:** during Xetra hours a second workflow, `.github/workflows/live-dax40.yml`, runs `python/build_live.py` every 5 minutes. It fetches 5-minute bars for the DAX and all 40 members for the last five sessions and force-pushes them as `live.json` to the `live-data` branch (one commit, so history stays small). The page checks that file through the GitHub API every 30 seconds and, on each new bar, adds today's prices to every view and recomputes the correlation matrix, which it draws three ways: a Chart.js heatmap, a D3 force-directed network (minimum spanning tree or threshold) and Cytoscape.js sector clusters. Correlation windows: today or five sessions of 5-minute returns, five sessions of 30-minute returns, or 3 months / 1 year of daily returns. Yahoo delays Xetra quotes by about 15 minutes and GitHub can start scheduled jobs late, so live figures trail the market by roughly 15–25 minutes; real-time Xetra data needs a paid licence.
 
 **Data sources (free, no API key):** Yahoo Finance through the open-source [yfinance](https://github.com/ranaroussi/yfinance) library (Stooq CSV as fallback) and the [ECB Data Portal](https://data.ecb.europa.eu) API. A static site cannot call these from the browser, so the GitHub Actions workflow `.github/workflows/update-dax40.yml` runs `python/build_dax40.py` on weekdays at 18:20 UTC, after the Xetra close, and commits `data/dax40.js`. It can also be started by hand under *Actions → Update DAX market data → Run workflow*, or locally:
 
@@ -128,9 +130,10 @@ No build step, just static files.
 
 ```
 ├── index.html             page layout and text
-├── dax.html               DAX market page (real end-of-day data, updated daily)
+├── dax.html               DAX market page (5-minute live layer + daily data)
 ├── .github/workflows/
-│   └── update-dax40.yml   daily data job for dax.html
+│   ├── live-dax40.yml     5-minute bars to the live-data branch during Xetra hours
+│   └── update-dax40.yml   daily closes for dax.html
 ├── assets/
 │   ├── app.js             overview, volatility and correlation tabs (d3 v7)
 │   ├── risk.js            risk layer 1: short-term VaR / ES engine and tab
@@ -138,7 +141,8 @@ No build step, just static files.
 │   ├── crises.js          Crisis history tab
 │   ├── fan.js             fan charts (both risk layers)
 │   ├── thesis.js          systematic-risk check vs the DAX (Investment thesis tab)
-│   ├── dax.js             DAX market page
+│   ├── dax.js             DAX market page: daily views, rebuilt with live prices
+│   ├── dax-live.js        live polling, intraday chart, correlation matrix / network / clusters
 │   └── style.css          styling, light and dark mode, phone layout
 ├── data/
 │   ├── data.js            price data loaded by the page
@@ -151,7 +155,9 @@ No build step, just static files.
 ├── python/
 │   ├── risk_metrics.py    reference implementation of risk layer 1
 │   ├── longterm_risk.py   reference implementation of risk layer 2 and the crisis table
-│   └── build_dax40.py     fetches DAX member prices, market caps and ECB rates
+│   ├── build_dax40.py     fetches DAX member prices, market caps and ECB rates
+│   ├── build_live.py      fetches 5-minute bars for the live layer
+│   └── requirements.txt   Python packages for both data jobs
 └── docs/
     ├── INVESTMENT_THESIS.md qualitative case and systematic-risk analysis
     ├── RISK_METHODOLOGY.md risk concepts, formulas, code reference (both layers)

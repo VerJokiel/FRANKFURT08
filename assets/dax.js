@@ -1,6 +1,8 @@
-/* DAX market page: the current state of the German market from real end-of-day data.
-   Plain JS + d3 v7, no build step. Data: window.DAX40 from data/dax40.js, refreshed after each
-   Xetra session by .github/workflows/update-dax40.yml (python/build_dax40.py). */
+/* DAX market page, daily layer: index, market map, movers, internals, sectors, rates.
+   Plain JS + d3 v7, no build step. Data: window.DAX40 from data/dax40.js (daily closes,
+   refreshed after each Xetra session by .github/workflows/update-dax40.yml).
+   During the session, assets/dax-live.js calls DaxDaily.applyLive() with the latest 5-minute
+   prices; they are added as a provisional row for today and every view below is rebuilt. */
 (() => {
   const D = window.DAX40;
   const $ = (id) => document.getElementById(id);
@@ -8,106 +10,107 @@
   if (!D || !D.dates || !D.dates.length) {
     $('dx-empty').hidden = false;
     document.querySelectorAll('[data-needs-data]').forEach((n) => { n.hidden = true; });
+    window.DaxDaily = null;
     return;
   }
 
-  /* ---------- data ---------- */
-  const parse = (s) => new Date(s + 'T00:00:00Z');
-  const DATES = D.dates.map(parse);
-  const T = DATES.length;
-  const MEM = D.members;                                    // [{tk, name, sector, weight, cap}]
-  const N = MEM.length;
-  const px = MEM.map((_, j) => D.rows.map((r) => r[j]));    // px[j][t], EUR closes
-  const lr = px.map((p) => p.map((v, t) => (t ? Math.log(v / p[t - 1]) : 0)));
-  const dax = D.dax;
-  const rDax = dax.map((v, t) => (t ? Math.log(v / dax[t - 1]) : 0));
-
   /* ---------- formatting ---------- */
+  const parse = (s) => new Date(s + 'T00:00:00Z');
   const pct = d3.format('.1%'), pct0 = d3.format('.0%');
   const signed = (v, d = 1) => (v == null || !isFinite(v) ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d) + '%');
   const bp = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v * 100)) + ' bp';
   const pts = d3.format(',.0f'), eur = d3.format(',.2f');
   const fmtDay = d3.utcFormat('%-d %b %Y');
+  const fmtClock = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
   const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
   const cssVar = (n) => getComputedStyle(document.querySelector('.page') || document.documentElement).getPropertyValue(n).trim();
   const SECTOR_COL = ['#d6b062', '#9fcb9b', '#a3b8de', '#7fd1d8', '#b3bccb', '#e8c79a', '#c7a8e8', '#e9a6c5', '#f2948a'];
   const secColor = (s) => SECTOR_COL[D.sectors.indexOf(s) % SECTOR_COL.length];
 
   /* ---------- statistics ---------- */
+  const MEM = D.members;                                    // [{tk, name, sector, weight, cap}]
+  const N = MEM.length;
   const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
   const sd = (a) => { const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / (a.length - 1)); };
   const annVol = (a) => sd(a) * Math.sqrt(252);
   const tail = (a, n) => a.slice(Math.max(1, a.length - n));
-  const ytdIndex = (() => { const yr = DATES[T - 1].getUTCFullYear(); let i = T - 1; while (i > 0 && DATES[i].getUTCFullYear() === yr) i--; return i; })();
-  const PERIODS = {
-    '1d': { label: '1 day', from: T - 2, range: 0.03 },
-    '1w': { label: '1 week', from: T - 6, range: 0.05 },
-    '1m': { label: '1 month', from: T - 22, range: 0.10 },
-    'ytd': { label: 'Year to date', from: ytdIndex, range: 0.30 },
-    '1y': { label: '1 year', from: T - 253, range: 0.40 },
-  };
-  const chg = (a, from) => a[T - 1] / a[Math.max(0, from)] - 1;
-  const sma = (a, n, t) => (t < n - 1 ? null : mean(a.slice(t - n + 1, t + 1)));
-
-  // index level and risk
-  let peak = -Infinity; const dd = dax.map((v) => { peak = Math.max(peak, v); return v / peak - 1; });
-  const hi52 = d3.max(dax.slice(-252)), lo52 = d3.min(dax.slice(-252));
-  const r1y = tail(rDax, 252).map((x) => Math.exp(x) - 1).sort((a, b) => a - b);
   const quant = (s, p) => { const h = (s.length - 1) * p, lo = Math.floor(h); return s[lo] + (s[Math.ceil(h)] - s[lo]) * (h - lo); };
-  const var99 = -quant(r1y, 0.01), es975 = -mean(r1y.filter((x) => x <= quant(r1y, 0.025)));
-  const vol21 = (t) => (t < 21 ? null : annVol(rDax.slice(t - 20, t + 1)));
-  const vol1y = annVol(tail(rDax, 252));
-  const ma200 = dax.map((_, t) => sma(dax, 200, t));
-
-  // members: moves, trend and 52-week extremes
-  const stock = MEM.map((m, j) => {
-    const p = px[j], o = { ...m, j, last: p[T - 1] };
-    for (const k in PERIODS) o[k] = chg(p, PERIODS[k].from);
-    o.ma50 = sma(p, 50, T - 1); o.ma200 = sma(p, 200, T - 1);
-    const yr = p.slice(-252); o.hi = d3.max(yr); o.lo = d3.min(yr);
-    const recentHi = d3.max(p.slice(-10)), recentLo = d3.min(p.slice(-10));
-    const before = p.slice(-252, -10);
-    o.newHi = recentHi >= d3.max(before); o.newLo = recentLo <= d3.min(before);
-    return o;
-  });
-  const adv = stock.filter((s) => s['1d'] > 0).length, dec = stock.filter((s) => s['1d'] < 0).length;
-  const above = (n) => DATES.map((d, t) => {
-    if (t < n - 1) return { x: d, y: null };
-    let up = 0; for (let j = 0; j < N; j++) { const p = px[j]; let s = 0; for (let k = t - n + 1; k <= t; k++) s += p[k]; if (p[t] > s / n) up++; }
-    return { x: d, y: up / N };
-  });
-  const above50 = above(50), above200 = above(200);
-
+  const sma = (a, n, t) => (t < n - 1 ? null : mean(a.slice(t - n + 1, t + 1)));
   // average pairwise correlation: for standardised returns z, the sum of all pairwise ρ equals Var(Σz)
-  function avgCorr(t, win, cols) {
-    const n = cols.length; if (n < 2 || t < win) return null;
+  function avgCorrOf(series, cols) {
+    const n = cols.length, win = series[cols[0]].length; if (n < 2 || win < 3) return null;
     const sum = new Float64Array(win);
-    for (const j of cols) {
-      const a = lr[j].slice(t - win + 1, t + 1), m = mean(a), s = sd(a) || 1e-12;
-      for (let k = 0; k < win; k++) sum[k] += (a[k] - m) / s;
-    }
+    for (const j of cols) { const a = series[j], m = mean(a), s = sd(a) || 1e-12; for (let k = 0; k < win; k++) sum[k] += (a[k] - m) / s; }
     return (sd(Array.from(sum)) ** 2 - n) / (n * (n - 1));
   }
-  const ALL = MEM.map((_, j) => j);
-  const corrSeries = [];
-  for (let t = T - 1; t >= 63; t -= 3) corrSeries.unshift({ x: DATES[t], y: avgCorr(t, 63, ALL) });
-  const corrNow = corrSeries.at(-1).y;
-  const corrYear = corrSeries.filter((d) => d.x >= DATES[Math.max(0, T - 252)]).map((d) => d.y);
-  // dispersion: cross-sectional standard deviation of members' 21-day returns
-  const dispSeries = DATES.map((d, t) => ({ x: d, y: t < 21 ? null : sd(px.map((p) => p[t] / p[t - 21] - 1)) }));
 
-  // sectors: members weighted by index weight, rebalanced daily
-  const sectors = D.sectors.map((s) => {
-    const cols = MEM.map((m, j) => (m.sector === s ? j : -1)).filter((j) => j >= 0);
-    if (!cols.length) return null;
-    const w = d3.sum(cols, (j) => MEM[j].weight), lvl = [100];
-    for (let t = 1; t < T; t++) lvl.push(lvl[t - 1] * (1 + d3.sum(cols, (j) => MEM[j].weight / w * (px[j][t] / px[j][t - 1] - 1))));
-    const o = { s, cols, w, vol: annVol(tail(lvl.map((v, t) => (t ? Math.log(v / lvl[t - 1]) : 0)), 252)), corr: avgCorr(T - 1, 252, cols) };
-    for (const k in PERIODS) o[k] = chg(lvl, PERIODS[k].from);
-    return o;
-  }).filter(Boolean).sort((a, b) => b.w - a.w);
+  /* ---------- model: everything the views show, rebuilt when live prices arrive ---------- */
+  function buildModel(live) {
+    const dates = D.dates.slice(), dax = D.dax.slice(), rows = D.rows.map((r) => r.slice());
+    let provisional = null;
+    if (live && live.session > D.asof && live.prev_date === D.asof && live.last.DAX) {
+      const ratio = (tk) => (live.last[tk] && live.prev_close[tk] ? live.last[tk] / live.prev_close[tk] : 1);
+      dates.push(live.session);
+      dax.push(dax[dax.length - 1] * ratio('DAX'));
+      rows.push(MEM.map((m, j) => rows[rows.length - 1][j] * ratio(m.tk)));
+      provisional = { time: new Date(live.lastTime * 1000), missing: MEM.filter((m) => !live.last[m.tk]).map((m) => m.tk) };
+    }
+    const DATES = dates.map(parse), T = DATES.length;
+    const px = MEM.map((_, j) => rows.map((r) => r[j]));
+    const lr = px.map((p) => p.map((v, t) => (t ? Math.log(v / p[t - 1]) : 0)));
+    const rDax = dax.map((v, t) => (t ? Math.log(v / dax[t - 1]) : 0));
+    const ytdIndex = (() => { const yr = DATES[T - 1].getUTCFullYear(); let i = T - 1; while (i > 0 && DATES[i].getUTCFullYear() === yr) i--; return i; })();
+    const PERIODS = {
+      '1d': { label: provisional ? 'Today' : '1 day', from: T - 2, range: 0.03 },
+      '1w': { label: '1 week', from: T - 6, range: 0.05 },
+      '1m': { label: '1 month', from: T - 22, range: 0.10 },
+      'ytd': { label: 'Year to date', from: ytdIndex, range: 0.30 },
+      '1y': { label: '1 year', from: T - 253, range: 0.40 },
+    };
+    const chg = (a, from) => a[T - 1] / a[Math.max(0, from)] - 1;
 
-  /* ---------- tooltips ---------- */
+    let peak = -Infinity; const dd = dax.map((v) => { peak = Math.max(peak, v); return v / peak - 1; });
+    const r1y = tail(rDax, 252).map((x) => Math.exp(x) - 1).sort((a, b) => a - b);
+    const vol21 = (t) => (t < 21 ? null : annVol(rDax.slice(t - 20, t + 1)));
+    const stock = MEM.map((m, j) => {
+      const p = px[j], o = { ...m, j, last: p[T - 1] };
+      for (const k in PERIODS) o[k] = chg(p, PERIODS[k].from);
+      const yr = p.slice(-252); o.hi = d3.max(yr); o.lo = d3.min(yr);
+      const before = p.slice(-252, -10);
+      o.newHi = d3.max(p.slice(-10)) >= d3.max(before); o.newLo = d3.min(p.slice(-10)) <= d3.min(before);
+      return o;
+    });
+    const above = (n) => DATES.map((d, t) => {
+      if (t < n - 1) return { x: d, y: null };
+      let up = 0; for (let j = 0; j < N; j++) { const p = px[j]; let s = 0; for (let k = t - n + 1; k <= t; k++) s += p[k]; if (p[t] > s / n) up++; }
+      return { x: d, y: up / N };
+    });
+    const ALL = MEM.map((_, j) => j);
+    const corrAt = (t, win, cols) => avgCorrOf(lr.map((a) => a.slice(t - win + 1, t + 1)), cols);
+    const corrSeries = [];
+    for (let t = T - 1; t >= 63; t -= 3) corrSeries.unshift({ x: DATES[t], y: corrAt(t, 63, ALL) });
+    const sectors = D.sectors.map((s) => {
+      const cols = ALL.filter((j) => MEM[j].sector === s); if (!cols.length) return null;
+      const w = d3.sum(cols, (j) => MEM[j].weight), lvl = [100];
+      for (let t = 1; t < T; t++) lvl.push(lvl[t - 1] * (1 + d3.sum(cols, (j) => MEM[j].weight / w * (px[j][t] / px[j][t - 1] - 1))));
+      const o = { s, cols, w, vol: annVol(tail(lvl.map((v, t) => (t ? Math.log(v / lvl[t - 1]) : 0)), 252)), corr: T > 253 ? corrAt(T - 1, 252, cols) : null };
+      for (const k in PERIODS) o[k] = chg(lvl, PERIODS[k].from);
+      return o;
+    }).filter(Boolean).sort((a, b) => b.w - a.w);
+
+    return {
+      provisional, DATES, T, dax, rDax, px, lr, PERIODS, ytdIndex, chg, dd, vol21, stock, sectors, corrSeries,
+      hi52: d3.max(dax.slice(-252)), lo52: d3.min(dax.slice(-252)),
+      var99: -quant(r1y, 0.01), es975: -mean(r1y.filter((x) => x <= quant(r1y, 0.025))),
+      vol1y: annVol(tail(rDax, 252)), ma200: dax.map((_, t) => sma(dax, 200, t)),
+      above50: above(50), above200: above(200),
+      adv: stock.filter((s) => s['1d'] > 0).length, dec: stock.filter((s) => s['1d'] < 0).length,
+      dispSeries: DATES.map((d, t) => ({ x: d, y: t < 21 ? null : sd(px.map((p) => p[t] / p[t - 21] - 1)) })),
+    };
+  }
+  let M = buildModel(null);
+
+  /* ---------- tooltips and charts ---------- */
   function showTip(card, event, head, lines) {
     let t = card.querySelector(':scope > .tip'); if (!t) { t = el('div', { className: 'tip' }); card.appendChild(t); }
     t.replaceChildren(el('div', { className: 'h', textContent: head }));
@@ -125,7 +128,7 @@
   const hideTip = (card) => { const t = card.querySelector(':scope > .tip'); if (t) t.hidden = true; };
   function measure(svg, text) { const t = svg.append('text').attr('class', 'tick').text(text); const w = t.node().getComputedTextLength(); t.remove(); return w; }
 
-  /* ---------- line chart: series [{name, color, points:[{x,y}], dash, area, step}] ---------- */
+  /* line chart over dates: series [{name, color, points:[{x,y}], dash, area, step}] */
   function lineChart(box, series, o) {
     const card = box.closest('.card');
     box.replaceChildren();
@@ -199,41 +202,45 @@
 
   /* ---------- sections ---------- */
   function drawFreshness() {
+    const { DATES, T, provisional } = M;
     const built = new Date(D.built.replace('Z', ':00Z'));
-    const age = Math.floor((Date.now() - DATES[T - 1]) / 864e5);
-    $('dx-asof').textContent = `Last close ${fmtDay(DATES[T - 1])}. Updated ${d3.utcFormat('%-d %b %Y, %H:%M UTC')(built)} from ${D.sources.prices}${D.sources.fallback ? ' and ' + D.sources.fallback : ''}.`;
+    $('dx-asof').textContent = provisional
+      ? `Today's figures use 5-minute prices up to ${fmtClock(provisional.time)} Frankfurt time (Yahoo delays Xetra quotes by about 15 minutes); longer periods use daily closes to ${fmtDay(parse(D.asof))}.`
+      : `Last close ${fmtDay(DATES[T - 1])}. Daily data updated ${d3.utcFormat('%-d %b %Y, %H:%M UTC')(built)} from ${D.sources.prices}${D.sources.fallback ? ' and ' + D.sources.fallback : ''}.`;
+    const age = Math.floor((Date.now() - parse(D.asof)) / 864e5);
     const warn = $('dx-stale');
     warn.hidden = age <= 4;
-    if (!warn.hidden) warn.textContent = `This data is ${age} days old. The daily update job may have failed; check the repository's Actions tab.`;
-    if (D.missing && D.missing.length) {
-      const m = $('dx-missing'); m.hidden = false;
-      m.textContent = `No data for ${D.missing.map((x) => x.name).join(', ')} in this update; ${N} of ${N + D.missing.length} members shown.`;
-    }
+    if (!warn.hidden) warn.textContent = `The daily data is ${age} days old. The daily update job may have failed; check the repository's Actions tab.`;
+    const miss = (D.missing || []).map((x) => x.name);
+    $('dx-missing').hidden = !miss.length;
+    if (miss.length) $('dx-missing').textContent = `No data for ${miss.join(', ')} in this update; ${N} of ${N + miss.length} members shown.`;
   }
 
   function drawStats() {
+    const { dax, T, chg, ytdIndex, DATES, vol21, vol1y, hi52, lo52, var99, es975, adv, dec, ma200, above50, above200, corrSeries, provisional } = M;
     const box = $('dx-stats'); box.replaceChildren();
     const d1 = dax[T - 1] / dax[T - 2] - 1;
     box.append(
-      stat('DAX close', pts(dax[T - 1]), `${signed(d1, 2)} on the day (${d1 >= 0 ? '+' : '−'}${pts(Math.abs(dax[T - 1] - dax[T - 2]))} pts)`, null, true),
+      stat(provisional ? `DAX at ${fmtClock(provisional.time)}` : 'DAX close', pts(dax[T - 1]),
+        `${signed(d1, 2)} ${provisional ? 'today' : 'on the day'} (${d1 >= 0 ? '+' : '−'}${pts(Math.abs(dax[T - 1] - dax[T - 2]))} pts)`, null, true),
       stat('1 month', signed(chg(dax, T - 22)), 'last 21 sessions', tone(chg(dax, T - 22))),
       stat('Year to date', signed(chg(dax, ytdIndex)), 'since ' + fmtDay(DATES[ytdIndex]), tone(chg(dax, ytdIndex))),
       stat('1 year', signed(chg(dax, T - 253)), 'last 252 sessions', tone(chg(dax, T - 253))),
       stat('Volatility, 1 month', pct(vol21(T - 1)), '1-year average ' + pct(vol1y)),
       stat('Off 52-week high', dax[T - 1] >= hi52 ? 'At high' : signed(dax[T - 1] / hi52 - 1), `range ${pts(lo52)} – ${pts(hi52)}`),
       stat('1-day VaR 99%', pct(var99), 'ES 97.5% ' + pct(es975) + ', last year'),
-      stat('Breadth', `${adv} / ${dec}`, 'members up / down on the day'),
+      stat('Breadth', `${adv} / ${dec}`, `members up / down ${provisional ? 'today' : 'on the day'}`),
     );
-    const b50 = above50[T - 1].y, b200 = above200[T - 1].y;
-    const trend = dax[T - 1] > ma200[T - 1] ? 'above' : 'below';
-    $('dx-read').textContent = `The DAX is ${pct(Math.abs(dax[T - 1] / ma200[T - 1] - 1))} ${trend} its 200-day average. ` +
-      `${pct0(b50)} of members trade above their 50-day average and ${pct0(b200)} above their 200-day average. ` +
+    const corrNow = corrSeries.at(-1).y, corrYear = corrSeries.filter((d) => d.x >= DATES[Math.max(0, T - 252)]).map((d) => d.y);
+    $('dx-read').textContent = `The DAX is ${pct(Math.abs(dax[T - 1] / ma200[T - 1] - 1))} ${dax[T - 1] > ma200[T - 1] ? 'above' : 'below'} its 200-day average. ` +
+      `${pct0(above50[T - 1].y)} of members trade above their 50-day average and ${pct0(above200[T - 1].y)} above their 200-day average. ` +
       `Stocks are moving ${corrNow > 0.45 ? 'closely together' : corrNow > 0.3 ? 'moderately together' : 'fairly independently'} ` +
-      `(average correlation ${corrNow.toFixed(2)} over three months, against ${d3.min(corrYear).toFixed(2)}–${d3.max(corrYear).toFixed(2)} in the past year).`;
+      `(average correlation ${corrNow.toFixed(2)} over three months of daily returns, against ${d3.min(corrYear).toFixed(2)}–${d3.max(corrYear).toFixed(2)} in the past year).`;
   }
 
   let period = '1d';
   function drawMap() {
+    const { PERIODS, sectors, stock } = M;
     const box = $('dx-map'); box.replaceChildren();
     const card = box.closest('.card');
     const W = box.clientWidth; if (!W) return;
@@ -263,15 +270,17 @@
     leaf.on('pointermove', (event, d) => {
       const s = d.data.st;
       showTip(card, event, `${s.name} · ${s.sector}`, [
-        { name: 'Close', value: '€' + eur(s.last) }, { name: PERIODS[period].label, value: signed(s[period], 2) },
+        { name: M.provisional ? 'Price' : 'Close', value: '€' + eur(s.last) }, { name: PERIODS[period].label, value: signed(s[period], 2) },
         { name: 'Index weight', value: pct(s.weight) }, { name: '52-week range', value: `€${eur(s.lo)} – €${eur(s.hi)}` }]);
     }).on('pointerleave', () => hideTip(card));
     $('dx-map-scale').replaceChildren(el('span', { textContent: signed(-R, 0) }),
       Object.assign(el('span', { className: 'ramp' }), { style: `background:linear-gradient(90deg,${d3.range(0, 1.01, 0.25).map((k) => color(-R + 2 * R * k)).join(',')})` }),
       el('span', { textContent: signed(R, 0) }), el('span', { textContent: ' · size = index weight' }));
+    const b1 = document.querySelector('#dx-period button[data-p="1d"]'); if (b1) b1.textContent = PERIODS['1d'].label;
   }
 
   function drawMovers() {
+    const { stock, PERIODS } = M;
     const sorted = stock.slice().sort((a, b) => b[period] - a[period]);
     const fill = (id, list) => $(id).querySelector('tbody').replaceChildren(...list.map((s) => {
       const tr = el('tr');
@@ -285,13 +294,15 @@
   }
 
   function drawInternals() {
+    const { stock, adv, dec, above50, above200, T, provisional } = M;
+    const near = stock.filter((s) => s.last >= 0.95 * s.hi).length, hi = stock.filter((s) => s.newHi).length, lo = stock.filter((s) => s.newLo).length;
     const rows = [
-      ['Members up / down on the day', `${adv} / ${dec}`, adv / N],
+      [`Members up / down ${provisional ? 'today' : 'on the day'}`, `${adv} / ${dec}`, adv / N],
       ['Above 50-day average', pct0(above50[T - 1].y), above50[T - 1].y],
       ['Above 200-day average', pct0(above200[T - 1].y), above200[T - 1].y],
-      ['Within 5% of 52-week high', String(stock.filter((s) => s.last >= 0.95 * s.hi).length), stock.filter((s) => s.last >= 0.95 * s.hi).length / N],
-      ['New 52-week high, last 10 sessions', String(stock.filter((s) => s.newHi).length), stock.filter((s) => s.newHi).length / N],
-      ['New 52-week low, last 10 sessions', String(stock.filter((s) => s.newLo).length), stock.filter((s) => s.newLo).length / N],
+      ['Within 5% of 52-week high', String(near), near / N],
+      ['New 52-week high, last 10 sessions', String(hi), hi / N],
+      ['New 52-week low, last 10 sessions', String(lo), lo / N],
     ];
     $('dx-breadth-table').querySelector('tbody').replaceChildren(...rows.map(([k, v, f]) => {
       const tr = el('tr'), bar = el('td', { className: 'l' }), b = el('span', { className: 'minibar' }), i = el('i');
@@ -302,6 +313,7 @@
   }
 
   function drawCharts() {
+    const { DATES, dax, ma200, dd, vol21, vol1y, above50, above200, corrSeries, dispSeries } = M;
     const fg = cssVar('--fg'), gold = cssVar('--accent'), muted = cssVar('--muted'), bad = cssVar('--bad'), ok = cssVar('--ok'), neg = cssVar('--neg');
     lineChart($('dx-level'), [
       { name: 'DAX', color: gold, points: DATES.map((d, t) => ({ x: d, y: dax[t] })) },
@@ -324,7 +336,8 @@
 
   function drawSectors() {
     const keys = ['1d', '1m', 'ytd', '1y'];
-    $('dx-sectors').querySelector('tbody').replaceChildren(...sectors.map((s) => {
+    const th = document.querySelector('#dx-sectors thead th:nth-child(4)'); if (th) th.textContent = M.PERIODS['1d'].label;
+    $('dx-sectors').querySelector('tbody').replaceChildren(...M.sectors.map((s) => {
       const tr = el('tr'), nm = el('td', { className: 'l' }), i = el('i', { className: 'dot' });
       i.style.background = secColor(s.s); i.style.marginRight = '8px'; nm.append(i, document.createTextNode(s.s));
       tr.append(nm, el('td', { textContent: String(s.cols.length) }), el('td', { textContent: pct(s.w) }),
@@ -335,8 +348,8 @@
   }
 
   /* ---------- rates and currency (ECB) ---------- */
-  const M = D.macro || {};
-  const mser = (k) => (M[k] ? M[k].dates.map((d, i) => ({ x: parse(d), y: M[k].values[i] })) : null);
+  const MAC = D.macro || {};
+  const mser = (k) => (MAC[k] ? MAC[k].dates.map((d, i) => ({ x: parse(d), y: MAC[k].values[i] })) : null);
   function monthAgo(s) { const t = +s.at(-1).x - 30 * 864e5; let p = s[0]; for (const d of s) if (+d.x <= t) p = d; return p; }
   function drawMacro() {
     const box = $('dx-macro-stats'); box.replaceChildren();
@@ -345,22 +358,31 @@
     if (dfr) { const a = monthAgo(dfr); box.append(stat('ECB deposit rate', dfr.at(-1).y.toFixed(2) + '%', `${dfr.at(-1).y === a.y ? 'unchanged' : bp(dfr.at(-1).y - a.y)} vs a month ago · ${fmtDay(dfr.at(-1).x)}`)); }
     if (y10) { const a = monthAgo(y10); box.append(stat('10-year AAA yield', y10.at(-1).y.toFixed(2) + '%', `${bp(y10.at(-1).y - a.y)} vs a month ago · ${fmtDay(y10.at(-1).x)}`)); }
     if (fx) { const a = monthAgo(fx); box.append(stat('EUR/USD', fx.at(-1).y.toFixed(4), `${signed(fx.at(-1).y / a.y - 1, 1)} vs a month ago · ${fmtDay(fx.at(-1).x)}`)); }
-    if (y10 && dfr) { const s = y10.at(-1).y - dfr.at(-1).y; box.append(stat('Curve: 10y minus deposit rate', bp(s).replace(' bp', '') + ' bp', s > 0 ? 'upward-sloping' : 'inverted')); }
+    if (y10 && dfr) { const s = y10.at(-1).y - dfr.at(-1).y; box.append(stat('Curve: 10y minus deposit rate', bp(s), s > 0 ? 'upward-sloping' : 'inverted')); }
   }
   function drawMacroCharts() {
     const y10 = mser('y10'), dfr = mser('dfr'), fx = mser('eurusd');
     const rates = [y10 && { name: '10-year AAA yield', color: cssVar('--accent'), points: y10 }, dfr && { name: 'ECB deposit rate', color: cssVar('--muted'), step: true, width: 1.5, points: dfr }].filter(Boolean);
-    if (rates.length && $('dx-rates')) lineChart($('dx-rates'), rates, { yFmt: (v) => v.toFixed(1) + '%', yTip: (v) => v.toFixed(2) + '%', height: 220 });
-    if (fx && $('dx-fx')) lineChart($('dx-fx'), [{ name: 'EUR/USD', color: cssVar('--fg'), points: fx }], { yFmt: d3.format('.2f'), yTip: d3.format('.4f'), height: 220 });
+    if (rates.length) lineChart($('dx-rates'), rates, { yFmt: (v) => v.toFixed(1) + '%', yTip: (v) => v.toFixed(2) + '%', height: 220 });
+    if (fx) lineChart($('dx-fx'), [{ name: 'EUR/USD', color: cssVar('--fg'), points: fx }], { yFmt: d3.format('.2f'), yTip: d3.format('.4f'), height: 220 });
   }
 
   /* ---------- wiring ---------- */
+  function renderLive() { drawFreshness(); drawStats(); drawMap(); drawMovers(); drawInternals(); drawSectors(); drawCharts(); }
   document.querySelectorAll('#dx-period button').forEach((b) => b.addEventListener('click', () => {
     period = b.dataset.p;
     document.querySelectorAll('#dx-period button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     drawMap(); drawMovers();
   }));
   $('dx-weights').textContent = D.weights;
-  drawFreshness(); drawStats(); drawMap(); drawMovers(); drawInternals(); drawSectors(); drawMacro(); drawCharts();
+  drawMacro();
+  renderLive();
   let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawMap(); drawCharts(); }, 150); });
+
+  window.DaxDaily = {
+    members: MEM, sectors: D.sectors, secColor, asof: D.asof,
+    get model() { return M; },
+    /* live = {session, prev_date, lastTime, last:{tk: price}, prev_close:{tk: price}} */
+    applyLive(live) { M = buildModel(live); renderLive(); return !!M.provisional; },
+  };
 })();
