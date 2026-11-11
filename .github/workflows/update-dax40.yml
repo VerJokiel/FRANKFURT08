@@ -1,0 +1,50 @@
+name: Update DAX market data
+
+# Refreshes data/dax40.js for dax.html after each Xetra session.
+# Xetra closes 17:30 Frankfurt time; 18:20 UTC is 19:20 CET / 20:20 CEST, after Yahoo's final closes.
+on:
+  schedule:
+    - cron: "20 18 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - python/build_dax40.py
+      - .github/workflows/update-dax40.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-dax40
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy requests
+
+      - name: Fetch prices, market caps and ECB rates
+        run: python python/build_dax40.py --period 2y
+
+      - name: Commit if the data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/dax40.js data/dax40_prices.csv
+          if git diff --cached --quiet; then
+            echo "No change in data."
+          else
+            git commit -m "Update DAX market data ($(date -u +%Y-%m-%d))"
+            git pull --rebase origin main
+            git push
+          fi

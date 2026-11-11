@@ -348,3 +348,24 @@ footer { color: var(--slate); border-top-color: #d8d0bf; }
 .theme-a .pillars3 h3 { color: var(--c); }
 .theme-a .pillars3 .sector { border-top-width: 4px; }
 .theme-a > .stats .stat, .theme-a > .grid > .stats .stat { background: #fff; }
+
+/* ----- DAX market page (dax.html) and the link to it in the tab bar ----- */
+.tab-link { padding: 8px 14px; color: var(--slate); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab-link:hover { color: var(--navy); }
+.tab-link[aria-current="page"] { color: var(--navy); border-bottom-color: var(--gold); font-weight: 600; }
+.tab-link.dax-link::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); margin-right: 7px; vertical-align: middle; }
+.tab-link:focus-visible, .seg button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+#page-dax .note { margin-top: 0; }
+#page-dax > [data-needs-data] > .note { color: var(--slate); }
+.dx-alert { background: #fbeee6; border: 1px solid #e8c4a8; color: #7a3b16; border-radius: 10px; padding: 8px 12px; font-size: .86rem; }
+.dx-read { color: var(--charcoal); max-width: 62rem; font-size: 1rem; line-height: 1.55; margin: 14px 0 0; }
+.dx-movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 12px; }
+.dx-movers td.l b { font-weight: 600; }
+.dx-movers td.l .muted { font-size: .8rem; }
+.minibar { display: inline-block; width: 7rem; height: 6px; border-radius: 3px; background: rgba(243,239,230,.12); vertical-align: middle; overflow: hidden; }
+.minibar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+#dx-map { min-height: 0; }
+#dx-map-scale { flex-wrap: wrap; margin-top: 10px; }
+.dx-method { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: .9rem; }
+.dx-method code, #dx-empty code { background: rgba(243,239,230,.1); padding: 1px 5px; border-radius: 4px; }
+@media (max-width: 600px) { .minibar { width: 4rem; } .tab-link { padding: 7px 9px; } }
