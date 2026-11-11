@@ -4,6 +4,62 @@
    During the session, assets/dax-live.js calls DaxDaily.applyLive() with the latest 5-minute
    prices; they are added as a provisional row for today and every view below is rebuilt. */
 (() => {
+  /* ---------- update schedule, in Frankfurt time (shared with assets/dax-live.js) ---------- */
+  // Xetra trading holidays on weekdays; check the Deutsche Börse calendar each December and extend.
+  const XETRA_HOLIDAYS = new Set(['2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01', '2027-03-26', '2027-03-29', '2027-12-24', '2027-12-31']);
+  const BER = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const bParts = (d) => { const p = Object.fromEntries(BER.formatToParts(d).map((x) => [x.type, x.value])); return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, mi: +p.minute }; };
+  const berlinTime = (y, m, d, h, mi) => {   // the instant when Frankfurt clocks show y-m-d h:mi
+    let t = Date.UTC(y, m - 1, d, h, mi);
+    for (let k = 0; k < 2; k++) { const p = bParts(new Date(t)); t = Date.UTC(y, m - 1, d, h, mi) - (Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) - t); }
+    return new Date(t);
+  };
+  const isoDay = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const isTradingDay = (y, m, d) => { const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); return wd > 0 && wd < 6 && !XETRA_HOLIDAYS.has(isoDay(y, m, d)); };
+  function dayAfter(y, m, d, k) { const t = new Date(Date.UTC(y, m - 1, d + k)); return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()]; }
+  const Schedule = {
+    /* is Xetra trading now (09:00–17:30 Frankfurt)? */
+    sessionOpen(now = new Date()) { const p = bParts(now), t = p.h * 60 + p.mi; return isTradingDay(p.y, p.m, p.d) && t >= 540 && t < 1050; },
+    /* the next 09:00 Frankfurt open after `now` */
+    nextOpen(now = new Date()) {
+      const p = bParts(now);
+      for (let k = 0; k < 14; k++) {
+        const [y, m, d] = dayAfter(p.y, p.m, p.d, k);
+        if (!isTradingDay(y, m, d)) continue;
+        const open = berlinTime(y, m, d, 9, 0);
+        if (open > now) return open;
+      }
+      return null;
+    },
+    /* the next run of the daily-close job: 18:20 UTC Monday–Friday */
+    nextDailyJob(now = new Date()) {
+      for (let k = 0; k < 8; k++) {
+        const t = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + k, 18, 20));
+        const wd = t.getUTCDay(); if (wd === 0 || wd === 6 || t <= now) continue;
+        return t;
+      }
+      return null;
+    },
+    /* 'today 19:20', 'tomorrow 09:00', 'Mon 16 Nov 09:00' in Frankfurt time */
+    when(t, now = new Date()) {
+      const a = bParts(t), b = bParts(now);
+      const time = `${String(a.h).padStart(2, '0')}:${String(a.mi).padStart(2, '0')}`;
+      const da = Date.UTC(a.y, a.m - 1, a.d), db = Date.UTC(b.y, b.m - 1, b.d), diff = Math.round((da - db) / 864e5);
+      if (diff === 0) return 'today ' + time;
+      if (diff === 1) return 'tomorrow ' + time;
+      return t.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Berlin' }) + ' ' + time;
+    },
+    /* 'in 4 min', 'in 2 h 10 min' */
+    inTime(t, now = new Date()) {
+      const mins = Math.max(0, Math.round((t - now) / 60000));
+      if (mins < 1) return 'any moment';
+      if (mins < 60) return `in ${mins} min`;
+      const h = Math.floor(mins / 60), r = mins % 60;
+      return h < 48 ? `in ${h} h${r ? ' ' + r + ' min' : ''}` : `in ${Math.round(h / 24)} days`;
+    },
+  };
+  window.DaxSchedule = Schedule;
+
   const D = window.DAX40;
   const $ = (id) => document.getElementById(id);
   const el = (tag, props = {}) => Object.assign(document.createElement(tag), props);
@@ -207,6 +263,10 @@
     $('dx-asof').textContent = provisional
       ? `Today's figures use 5-minute prices up to ${fmtClock(provisional.time)} Frankfurt time (Yahoo delays Xetra quotes by about 15 minutes); longer periods use daily closes to ${fmtDay(parse(D.asof))}.`
       : `Last close ${fmtDay(DATES[T - 1])}. Daily data updated ${d3.utcFormat('%-d %b %Y, %H:%M UTC')(built)} from ${D.sources.prices}${D.sources.fallback ? ' and ' + D.sources.fallback : ''}.`;
+    const nextDaily = Schedule.nextDailyJob();
+    $('dx-next-daily').textContent = nextDaily
+      ? `Official closes are refreshed after each Xetra session; next update ${Schedule.when(nextDaily)} Frankfurt time (${Schedule.inTime(nextDaily)}).`
+      : '';
     const age = Math.floor((Date.now() - parse(D.asof)) / 864e5);
     const warn = $('dx-stale');
     warn.hidden = age <= 4;

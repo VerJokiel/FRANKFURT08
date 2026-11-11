@@ -125,15 +125,48 @@
     pill.textContent = { live: 'Live', closed: 'Market closed', waiting: 'Waiting for data', error: 'Live feed unavailable' }[kind];
     $('dx-live-text').textContent = text;
   }
+  /* status line: what is shown now and when the next data will arrive */
+  const S = window.DaxSchedule;
+  const CRON_MIN = 5, LATE_MIN = 12;
+  let lastChecked = null;
   function describeStatus(checkedAt) {
+    if (checkedAt) lastChecked = checkedAt;
     if (!L) return;
-    const lastBar = new Date(L.lastTime * 1000);
-    const age = (Date.now() - lastBar) / 60000;
-    const kind = L.market_open && age < 40 ? 'live' : 'closed';
+    const now = new Date();
+    const lastBar = new Date(L.lastTime * 1000), published = new Date(L.generated);
+    const sessionOn = S.sessionOpen(now);
+    // bars keep arriving until ~17:55 because of the source delay
+    const tail = !sessionOn && L.session === berlinDay.format(now) && (now - lastBar) / 60000 < 45 && L.market_open;
+    let kind, next;
+    if (sessionOn || tail) {
+      kind = 'live';
+      const due = new Date(+published + CRON_MIN * 60000);
+      const late = (now - due) / 60000 > LATE_MIN - CRON_MIN;
+      next = late
+        ? `Next update is running late: GitHub sometimes starts scheduled jobs a few minutes behind. This page checks every 30 seconds and refreshes by itself.`
+        : `Next update expected around ${clock(due)} (${S.inTime(due, now)}); this page refreshes by itself.`;
+    } else {
+      kind = 'closed';
+      const open = S.nextOpen(now);
+      const firstBars = open ? new Date(+open + 20 * 60000) : null;
+      next = firstBars ? `Next live update ${S.when(firstBars, now)} Frankfurt time (${S.inTime(firstBars, now)}), when the first bars after the 09:00 open arrive.` : '';
+    }
     setStatus(kind, kind === 'live'
-      ? `Latest 5-minute bar ${clock(lastBar)} Frankfurt time (source delay about 15 min). Checked ${clockS(checkedAt)}; new bars every 5 minutes.`
-      : `Showing the session of ${dayLabel(L.session)}, last bar ${clock(lastBar)} Frankfurt time. Updates resume when Xetra opens (09:00).`);
+      ? `Latest 5-minute bar ${clock(lastBar)} Frankfurt time (source delay about 15 min), published ${clock(published)}.`
+      : `Showing the session of ${dayLabel(L.session)}, last bar ${clock(lastBar)} Frankfurt time.`);
+    $('dx-next-live').textContent = next + (lastChecked ? ` Last checked ${clockS(lastChecked)}.` : '');
   }
+  /* log of updates received while the page is open */
+  const LOG = [];
+  function logUpdate(first) {
+    const now = new Date();
+    LOG.unshift({ at: now, bar: new Date(L.lastTime * 1000), published: new Date(L.generated), first });
+    LOG.splice(8);
+    $('dx-log-count').textContent = String(LOG.length);
+    $('dx-log').replaceChildren(...LOG.map((e) => el('li', { textContent:
+      `${clockS(e.at)} · ${e.first ? 'loaded' : 'new data'}: 5-minute bar ${clock(e.bar)}, published ${clock(e.published)}` })));
+  }
+  setInterval(() => { if (!document.hidden) describeStatus(null); }, 15000);
 
   /* ---------- polling ---------- */
   let timer = null, useRaw = false;
@@ -148,9 +181,11 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const raw = await res.json();
       if (raw.generated !== lastGenerated) {
+        const first = lastGenerated === null;
         lastGenerated = raw.generated;
         L = prepare(raw);
         onLive();
+        logUpdate(first);
       }
       describeStatus(checkedAt);
     } catch (e) {
@@ -243,11 +278,10 @@
 
   /* Chart.js matrix heatmap */
   let matChart = null;
-  const cellColor = (v) => {
-    if (v == null) return 'rgba(243,239,230,.04)';
-    const a = Math.min(1, Math.abs(v)) ** 0.8;
-    return d3.interpolateRgb('#1c3155', v >= 0 ? '#e0b45e' : '#8fb4ea')(a);
-  };
+  // same scale as the Correlation matrix tab: green = independent, yellow = moderate, red = moving together
+  const CORR_STOPS = [[-0.3, '#1a9850'], [0, '#66bd63'], [0.3, '#fee08b'], [0.55, '#f46d43'], [0.8, '#d73027']];
+  const corrColor = d3.scaleLinear(CORR_STOPS.map((d) => d[0]), CORR_STOPS.map((d) => d[1])).interpolate(d3.interpolateRgb).clamp(true);
+  const cellColor = (v) => (v == null ? 'rgba(243,239,230,.04)' : v >= 0.999 ? '#2a3d5e' : corrColor(v));
   function drawMatrix() {
     const labels = ORDER.map((j) => MEM[j].tk);
     const data = [];
@@ -266,13 +300,14 @@
           label: (it) => (it.raw.v == null ? ' no data' : ` ρ = ${it.raw.v.toFixed(2)}`) } } },
         scales: {
           x: { type: 'category', labels, offset: true, position: 'top', grid: { display: false }, ticks: { autoSkip: false, maxRotation: 90, minRotation: 90, font: { size: 9 }, color: tickColor } },
-          y: { type: 'category', labels, offset: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 9 }, color: tickColor } },
+          y: { type: 'category', labels, offset: true, reverse: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 9 }, color: tickColor } },
         },
       },
     });
-    $('dx-matrix-scale').replaceChildren(el('span', { textContent: '−1' }),
-      Object.assign(el('span', { className: 'ramp' }), { style: `background:linear-gradient(90deg,${[-1, -0.5, 0, 0.5, 1].map(cellColor).join(',')})` }),
-      el('span', { textContent: '+1' }), el('span', { textContent: ' · axis labels coloured by sector' }));
+    const lo = CORR_STOPS[0][0], hi = CORR_STOPS[CORR_STOPS.length - 1][0];
+    $('dx-matrix-scale').replaceChildren(el('span', { textContent: 'independent ≤ −0.3' }),
+      Object.assign(el('span', { className: 'ramp' }), { style: `background:linear-gradient(90deg,${CORR_STOPS.map(([v, c]) => `${c} ${((v - lo) / (hi - lo) * 100).toFixed(0)}%`).join(',')})` }),
+      el('span', { textContent: '0.8+ together' }), el('span', { textContent: ' · axis labels coloured by sector' }));
   }
 
   /* D3 force-directed network */
@@ -307,8 +342,8 @@
     const changed = next.map((l) => l.key).join() !== links.map((l) => l.key).join();
     links = next;
     sim.force('link').links(links).distance((l) => 18 + 120 * (1 - l.r)).strength((l) => (netMode === 'mst' ? 0.8 : Math.max(0.05, l.r * 0.6)));
-    gL.selectAll('line').data(links, (d) => d.key).join('line').attr('stroke', '#f3efe6')
-      .attr('stroke-width', (d) => 0.5 + 3 * Math.max(0, d.r)).attr('stroke-opacity', (d) => 0.15 + 0.5 * Math.max(0, d.r));
+    gL.selectAll('line').data(links, (d) => d.key).join('line').attr('stroke', (d) => corrColor(d.r))
+      .attr('stroke-width', (d) => 0.8 + 3 * Math.max(0, d.r)).attr('stroke-opacity', (d) => 0.45 + 0.5 * Math.max(0, d.r));
     if (reduced) { sim.stop(); for (let k = 0; k < 200; k++) sim.tick(); ticked(); }
     else if (changed) sim.alpha(links.length && gL.attr('data-ready') ? 0.3 : 0.9).restart();
     gL.attr('data-ready', 1);
@@ -360,7 +395,7 @@
     const ws = all.map((e) => e[2]), lo = Math.min(cut, d3.max(ws) ?? 0), span = Math.max(0.05, (d3.max(ws) ?? 1) - lo);
     return all.filter((e) => e[2] >= cut).map(([a, b, w]) => ({ group: 'edges', data: {
       id: 'e:' + us[a].id + '|' + us[b].id, source: us[a].id, target: us[b].id, w, lbl: w.toFixed(2),
-      wd: 0.8 + 6 * (w - lo) / span, op: Math.min(0.9, 0.35 + 0.55 * (w - lo) / span) } }));
+      wd: 1 + 6 * (w - lo) / span, op: Math.min(0.95, 0.5 + 0.45 * (w - lo) / span), col: corrColor(w) } }));
   }
   function clusterLabel(s, mem) { const ic = avgP(mem, mem); const w = d3.sum(mem, (i) => MEM[i].weight); return `${s}\n${mem.length} · ρ̄ ${ic == null ? '–' : ic.toFixed(2)} · ${(w * 100).toFixed(0)}%`; }
   function rebuildCy() {
@@ -368,10 +403,10 @@
       cy = cytoscape({
         container: $('dx-cy'), minZoom: 0.3, maxZoom: 3, boxSelectionEnabled: false,
         style: [
-          { selector: "node[type='cluster']", style: { 'background-color': 'data(color)', label: 'data(label)', color: '#f3efe6', 'font-size': 10, 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-margin-y': 4, width: 'data(sz)', height: 'data(sz)', 'border-width': 2, 'border-color': '#13233f' } },
+          { selector: "node[type='cluster']", style: { 'background-color': 'data(color)', label: 'data(label)', color: '#f3efe6', 'font-size': 10, 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-margin-y': 5, width: 'data(sz)', height: 'data(sz)', 'border-width': 2, 'border-color': '#13233f', 'text-background-color': '#13233f', 'text-background-opacity': 0.75, 'text-background-padding': 2, 'text-background-shape': 'roundrectangle', 'z-index': 10 } },
           { selector: "node[type='parent']", style: { 'background-color': 'data(color)', 'background-opacity': 0.08, 'border-color': 'data(color)', 'border-width': 1.5, 'border-style': 'dashed', label: 'data(label)', color: '#b3bccb', 'font-size': 10, 'text-valign': 'top', 'text-halign': 'center', padding: 12, shape: 'round-rectangle' } },
           { selector: "node[type='stock']", style: { 'background-color': 'data(color)', label: 'data(id)', color: '#f3efe6', 'font-size': 9, width: 'data(sz)', height: 'data(sz)', 'text-valign': 'bottom', 'text-margin-y': 2 } },
-          { selector: 'edge', style: { width: 'data(wd)', 'line-color': '#f3efe6', opacity: 'data(op)', 'curve-style': 'bezier', label: 'data(lbl)', 'font-size': 8, color: '#f3efe6', 'text-background-color': '#13233f', 'text-background-opacity': 0.85, 'text-background-padding': 1 } },
+          { selector: 'edge', style: { width: 'data(wd)', 'line-color': 'data(col)', opacity: 'data(op)', 'curve-style': 'bezier', label: 'data(lbl)', 'font-size': 9, 'font-weight': 600, color: '#f3efe6', 'text-background-color': '#13233f', 'text-background-opacity': 0.9, 'text-background-padding': 2, 'text-background-shape': 'roundrectangle' } },
         ],
       });
       cy.on('tap', (e) => {
@@ -395,8 +430,15 @@
     });
     cy.elements().remove(); cy.add(els.concat(cyEdges(us)));
     const fresh = Object.keys(posMem).length === 0;
-    cy.layout({ name: 'cose', animate: !reduced && !fresh, animationDuration: 450, randomize: fresh, nodeRepulsion: () => 9000,
-      idealEdgeLength: (e) => 60 + 160 * (1 - Math.max(0, e.data('w'))), edgeElasticity: (e) => 40 + 200 * Math.max(0, e.data('w')), nestingFactor: 1.1, gravity: 0.35, numIter: 1200, fit: true, padding: 24 }).run();
+    if (!expanded.size) {
+      // all sectors closed: a ring ordered by index weight keeps every label and link readable
+      cy.layout({ name: 'circle', animate: !reduced && !fresh, animationDuration: 450, padding: 46, avoidOverlap: true, startAngle: -Math.PI / 2,
+        sort: (a, b) => (b.data('sz') || 0) - (a.data('sz') || 0) }).run();
+    } else {
+      cy.layout({ name: 'cose', animate: !reduced && !fresh, animationDuration: 450, randomize: fresh, nodeRepulsion: () => 60000, nodeOverlap: 20,
+        idealEdgeLength: (e) => 110 + 160 * (1 - Math.max(0, e.data('w'))), edgeElasticity: (e) => 40 + 120 * Math.max(0, e.data('w')),
+        nestingFactor: 0.8, gravity: 0.6, componentSpacing: 80, numIter: 1500, fit: true, padding: 30 }).run();
+    }
   }
   function updateCy() {
     if (!cy) { rebuildCy(); return; }

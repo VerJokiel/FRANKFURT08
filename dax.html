@@ -38,7 +38,12 @@
     </div>
 
     <div data-needs-data>
-      <div class="dx-live-bar" role="status" aria-live="polite"><span class="dx-pill waiting" id="dx-live-pill">Waiting for data</span><span id="dx-live-text"></span></div>
+      <div class="dx-updates">
+        <div class="dx-live-bar" role="status" aria-live="polite"><span class="dx-pill waiting" id="dx-live-pill">Waiting for data</span><span id="dx-live-text"></span></div>
+        <p class="dx-next"><b>Next intraday update:</b> <span id="dx-next-live">checking…</span></p>
+        <p class="dx-next"><b>Next daily update:</b> <span id="dx-next-daily"></span></p>
+        <details class="dx-log"><summary>Updates received while this page is open (<span id="dx-log-count">0</span>)</summary><ul id="dx-log"></ul></details>
+      </div>
       <p class="note" id="dx-asof"></p>
       <p class="note" id="dx-live-note"></p>
       <p class="dx-alert" id="dx-stale" hidden></p>
