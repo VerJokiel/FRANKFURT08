@@ -45,7 +45,7 @@ A separate page, linked as **DAX market** in the tab bar, shows the current stat
 - **Sectors:** weight, returns, volatility and internal correlation for nine sectors.
 - **Rates and currency:** ECB deposit rate, 10-year euro area AAA yield and EUR/USD.
 
-**Live updates:** during Xetra hours a second workflow, `.github/workflows/live-dax40.yml`, runs `python/build_live.py` every 5 minutes. It fetches 5-minute bars for the DAX and all 40 members for the last five sessions and force-pushes them as `live.json` to the `live-data` branch (one commit, so history stays small). The page checks that file through the GitHub API every 30 seconds and, on each new bar, adds today's prices to every view and recomputes the correlation matrix, which it draws three ways: a Chart.js heatmap, a D3 force-directed network (minimum spanning tree or threshold) and Cytoscape.js sector clusters. Correlation windows: today or five sessions of 5-minute returns, five sessions of 30-minute returns, or 3 months / 1 year of daily returns. Yahoo delays Xetra quotes by about 15 minutes and GitHub can start scheduled jobs late, so live figures trail the market by roughly 15–25 minutes; real-time Xetra data needs a paid licence. A box at the top of the page says when the next intraday bar and the next daily update are due (Frankfurt time, skipping weekends and Xetra holidays), flags a late scheduled run, and logs each update received while the page is open. Every panel also carries its own update line (what data it shows, when it next changes), and live-fed panels flash briefly when a new bar arrives.
+**Live updates:** GitHub starts frequent scheduled jobs late or skips them, so the live layer runs as one long job per Xetra session. `.github/workflows/live-dax40.yml` has several redundant morning start times; the first that fires runs `python/live_loop.py`, which waits for the 09:00 open and then, on its own 5-minute clock, fetches 5-minute bars for the DAX and all 40 members (`python/build_live.py`) and force-pushes them as `live.json` to the `live-data` branch (one commit, so history stays small). Before the 6-hour job limit it starts a fresh run of itself; after the close it commits the official daily closes (the separate daily workflow stays as a backup). Later start times queue behind the running job and exit when there is nothing to do. The page checks that file through the GitHub API every 30 seconds and, on each new bar, adds today's prices to every view and recomputes the correlation matrix, which it draws three ways: a Chart.js heatmap, a D3 force-directed network (minimum spanning tree or threshold) and Cytoscape.js sector clusters. Correlation windows: today or five sessions of 5-minute returns, five sessions of 30-minute returns, or 3 months / 1 year of daily returns. Yahoo delays Xetra quotes by about 15 minutes and GitHub can start scheduled jobs late, so live figures trail the market by roughly 15–25 minutes; real-time Xetra data needs a paid licence. A box at the top of the page says when the next intraday bar and the next daily update are due (Frankfurt time, skipping weekends and Xetra holidays), flags a late scheduled run, and logs each update received while the page is open. Every panel also carries its own update line (what data it shows, when it next changes), and live-fed panels flash briefly when a new bar arrives.
 
 **Data sources (free, no API key):** Yahoo Finance through the open-source [yfinance](https://github.com/ranaroussi/yfinance) library (Stooq CSV as fallback) and the [ECB Data Portal](https://data.ecb.europa.eu) API. A static site cannot call these from the browser, so the GitHub Actions workflow `.github/workflows/update-dax40.yml` runs `python/build_dax40.py` on weekdays at 18:20 UTC, after the Xetra close, and commits `data/dax40.js`. It can also be started by hand under *Actions → Update DAX market data → Run workflow*, or locally:
 
@@ -133,7 +133,7 @@ No build step, just static files.
 ├── index.html             page layout and text
 ├── dax.html               DAX market page (5-minute live layer + daily data)
 ├── .github/workflows/
-│   ├── live-dax40.yml     5-minute bars to the live-data branch during Xetra hours
+│   ├── live-dax40.yml     session-long job: 5-minute bars to the live-data branch, daily closes after the close
 │   └── update-dax40.yml   daily closes for dax.html
 ├── assets/
 │   ├── app.js             overview, volatility and correlation tabs (d3 v7)
@@ -158,6 +158,7 @@ No build step, just static files.
 │   ├── longterm_risk.py   reference implementation of risk layer 2 and the crisis table
 │   ├── build_dax40.py     fetches DAX member prices, market caps and ECB rates
 │   ├── build_live.py      fetches 5-minute bars for the live layer
+│   ├── live_loop.py       runs the live layer through a whole session (one job per day)
 │   └── requirements.txt   Python packages for both data jobs
 └── docs/
     ├── INVESTMENT_THESIS.md qualitative case and systematic-risk analysis
