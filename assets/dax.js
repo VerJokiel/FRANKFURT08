@@ -31,12 +31,15 @@
       }
       return null;
     },
-    /* the next run of the daily-close job: 18:20 UTC Monday–Friday */
+    /* when the next daily data lands: the session job commits closes, market caps and ECB data
+       at about 18:10 Frankfurt on trading days (backup jobs run later in the evening and next morning) */
     nextDailyJob(now = new Date()) {
-      for (let k = 0; k < 8; k++) {
-        const t = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + k, 18, 20));
-        const wd = t.getUTCDay(); if (wd === 0 || wd === 6 || t <= now) continue;
-        return t;
+      const p = bParts(now);
+      for (let k = 0; k < 14; k++) {
+        const [y, m, d] = dayAfter(p.y, p.m, p.d, k);
+        if (!isTradingDay(y, m, d)) continue;
+        const t = berlinTime(y, m, d, 18, 10);
+        if (t > now) return t;
       }
       return null;
     },
@@ -478,7 +481,7 @@
   let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawMap(); drawCharts(); }, 150); });
 
   window.DaxDaily = {
-    members: MEM, sectors: D.sectors, secColor, asof: D.asof,
+    members: MEM, sectors: D.sectors, secColor, asof: D.asof, built: D.built,
     get model() { return M; },
     /* live = {session, prev_date, lastTime, last:{tk: price}, prev_close:{tk: price}} */
     applyLive(live) { M = buildModel(live); renderLive(); return !!M.provisional; },

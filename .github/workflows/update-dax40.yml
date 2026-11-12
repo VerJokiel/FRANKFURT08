@@ -1,10 +1,15 @@
 name: Update DAX market data
 
-# Refreshes data/dax40.js for dax.html after each Xetra session.
-# Xetra closes 17:30 Frankfurt time; 18:20 UTC is 19:20 CET / 20:20 CEST, after Yahoo's final closes.
+# Backup for data/dax40.js (closes, market caps, ECB rates). The session job in live-dax40.yml
+# normally commits it at ~18:05 Frankfurt and refreshes it again before the next open; these runs
+# catch anything that job missed. GitHub starts scheduled runs late or skips them, hence several times.
+# A run that finds nothing new commits nothing, and build_dax40.py never replaces newer data with older.
 on:
   schedule:
-    - cron: "20 18 * * 1-5"
+    - cron: "20 18 * * 1-5"    # 19:20 CET / 20:20 CEST
+    - cron: "40 20 * * 1-5"    # 21:40 CET / 22:40 CEST
+    - cron: "10 4 * * 2-6"     # next morning 05:10 CET / 06:10 CEST
+    - cron: "35 11 * * 1-5"    # midday: picks up the ECB yield curve, published around noon
   workflow_dispatch:
   push:
     branches: [main]

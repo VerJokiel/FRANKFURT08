@@ -54,7 +54,7 @@ pip install yfinance pandas numpy requests
 python python/build_dax40.py --period 2y
 ```
 
-If the DAX or more than four members fail to download, the script stops and the last good data stays online. Index weights are approximated from market capitalisation with the 15% single-name cap; the member list in the script follows the 30 Oct 2026 index list and needs updating after each quarterly review.
+**How often each item is refreshed:** 5-minute prices every 5 minutes during the session; daily closes, market capitalisations (index weights) and the three ECB series once after each session (~18:05 Frankfurt, by the session job), again before the next open, and by backup runs of `update-dax40.yml` in the evening, early morning and around midday (when the ECB publishes the previous day's yield curve). An open page checks for a newer data file every 15 minutes and reloads itself when one is published. If the DAX or more than four members fail to download, the script stops and the last good data stays online; it also never replaces data with an older file, keeps yesterday's market caps or ECB series when one of those downloads fails, and commits nothing when nothing changed. The member list and the Xetra holiday list are maintained by hand (quarterly index reviews, once a year). Index weights are approximated from market capitalisation with the 15% single-name cap; the member list in the script follows the 30 Oct 2026 index list and needs updating after each quarterly review.
 
 ## Investment thesis (qualitative analysis)
 

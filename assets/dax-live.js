@@ -187,6 +187,7 @@
       if (res.status === 403 || res.status === 429) { useRaw = true; return; }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const raw = await res.json();
+      if (raw.prev_date > DD.asof) checkDaily(true);   // a new session began and newer closes should exist
       if (raw.generated !== lastGenerated) {
         const first = lastGenerated === null;
         lastGenerated = raw.generated;
@@ -201,6 +202,22 @@
     }
   }
   function schedule() { clearInterval(timer); timer = setInterval(() => { if (!document.hidden) poll(); }, POLL_MS); }
+
+  /* daily file: a page left open reloads itself when newer closes / ECB data are published */
+  let lastDailyCheck = 0;
+  async function checkDaily(force) {
+    if (!force && Date.now() - lastDailyCheck < 15 * 60000) return;
+    lastDailyCheck = Date.now();
+    try {
+      const res = await fetch('data/dax40.js?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' });
+      if (!res.ok) return;
+      const head = (await res.text()).slice(0, 400);
+      const asof = (head.match(/"asof":"(\d{4}-\d{2}-\d{2})"/) || [])[1];
+      const built = (head.match(/"built":"([^"]+)"/) || [])[1];
+      if ((asof && asof > DD.asof) || (built && built > DD.built)) location.reload();
+    } catch (e) { /* offline: try again later */ }
+  }
+  setInterval(() => { if (!document.hidden) checkDaily(false); }, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
   /* ---------- on new data ---------- */

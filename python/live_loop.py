@@ -100,14 +100,18 @@ def fetch_and_publish(dry: bool) -> None:
     publish(payload, dry)
 
 
-def daily_closes(dry: bool) -> None:
-    # the closing auction ends ~17:35 and the source lags ~15 minutes: wait until 18:05 for final closes
-    ready = datetime.now(BERLIN).replace(hour=18, minute=5, second=0, microsecond=0)
-    wait = (ready - datetime.now(BERLIN)).total_seconds()
-    if wait > 0:
-        log(f"waiting until {ready:%H:%M} for final closes")
-        time.sleep(wait)
-    log("session over: building official daily closes")
+def daily_closes(dry: bool, wait: bool = True) -> None:
+    """Rebuild data/dax40.js (closes, market caps, ECB series) and commit it if it changed."""
+    if wait:
+        # the closing auction ends ~17:35 and the source lags ~15 minutes: wait until 18:05 for final closes
+        ready = datetime.now(BERLIN).replace(hour=18, minute=5, second=0, microsecond=0)
+        secs = (ready - datetime.now(BERLIN)).total_seconds()
+        if secs > 0:
+            log(f"waiting until {ready:%H:%M} for final closes")
+            time.sleep(secs)
+        log("session over: building official daily closes")
+    else:
+        log("morning refresh of daily closes, market caps and ECB data")
     r = subprocess.run([sys.executable, str(HERE / "build_dax40.py"), "--period", "2y"], cwd=ROOT, capture_output=True, text=True)
     log((r.stderr or r.stdout).strip()[-400:])
     if r.returncode or dry or not remote_url():
@@ -164,6 +168,9 @@ def main() -> None:
         fetch_and_publish(a.dry_run)
         return
     if now < win[0]:
+        # catch up on anything the evening run missed (closes, market caps, ECB); never moves data backwards
+        daily_closes(a.dry_run, wait=False)
+        now = datetime.now(BERLIN)
         log(f"waiting for the open at {win[0]:%H:%M}")
         time.sleep((win[0] - now).total_seconds() + 60 * OFFSET_MIN)
 
