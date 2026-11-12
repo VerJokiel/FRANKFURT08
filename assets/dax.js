@@ -292,7 +292,7 @@
       stat('Volatility, 1 month', pct(vol21(T - 1)), '1-year average ' + pct(vol1y)),
       stat('Off 52-week high', dax[T - 1] >= hi52 ? 'At high' : signed(dax[T - 1] / hi52 - 1), `range ${pts(lo52)} – ${pts(hi52)}`),
       stat('1-day VaR 99%', pct(var99), 'ES 97.5% ' + pct(es975) + ', last year'),
-      stat('Breadth', `${adv} / ${dec}`, `members up / down ${provisional ? 'today' : 'on the day'}`),
+      stat('Breadth', `${adv} / ${dec}`, `members up / down ${provisional ? 'today' : 'on the day'}` + (N - adv - dec ? ` · ${N - adv - dec} unchanged` : '')),
     );
     const corrNow = corrSeries.at(-1).y, corrYear = corrSeries.filter((d) => d.x >= DATES[Math.max(0, T - 252)]).map((d) => d.y);
     $('dx-read').textContent = `The DAX is ${pct(Math.abs(dax[T - 1] / ma200[T - 1] - 1))} ${dax[T - 1] > ma200[T - 1] ? 'above' : 'below'} its 200-day average. ` +
@@ -359,18 +359,36 @@
   function drawInternals() {
     const { stock, adv, dec, above50, above200, T, provisional } = M;
     const near = stock.filter((s) => s.last >= 0.95 * s.hi).length, hi = stock.filter((s) => s.newHi).length, lo = stock.filter((s) => s.newLo).length;
+    const flat = N - adv - dec, day = provisional ? 'today' : 'on the day';
     const rows = [
-      [`Members up / down ${provisional ? 'today' : 'on the day'}`, `${adv} / ${dec}`, adv / N],
-      ['Above 50-day average', pct0(above50[T - 1].y), above50[T - 1].y],
-      ['Above 200-day average', pct0(above200[T - 1].y), above200[T - 1].y],
-      ['Within 5% of 52-week high', String(near), near / N],
-      ['New 52-week high, last 10 sessions', String(hi), hi / N],
-      ['New 52-week low, last 10 sessions', String(lo), lo / N],
+      { k: `Members up / down ${day}`, v: `${adv} up · ${dec} down` + (flat ? ` · ${flat} unchanged` : ''), parts: [adv, dec, flat],
+        d: `Each member's price ${provisional ? 'now' : 'at the close'} against the previous close, counted once whatever its size (SAP and Zalando weigh the same here). ` +
+           `A stock exactly unchanged${provisional ? ', or not yet traded today,' : ''} counts in neither, so the two numbers can add up to less than ${N}. ` +
+           'Most stocks rising (e.g. 30 up / 10 down) is a broad move; the DAX rising while most stocks fall means a few heavyweights carry it.' },
+      { k: 'Above 50-day average', v: pct0(above50[T - 1].y), f: above50[T - 1].y,
+        d: 'Share of members whose price is above the average of their last 50 closes (about 2½ months): the medium-term trend. Above 70% is a broad uptrend, below 30% broad weakness.' },
+      { k: 'Above 200-day average', v: pct0(above200[T - 1].y), f: above200[T - 1].y,
+        d: 'The same over 200 closes (about 10 months): the long-term trend. If this falls while the DAX makes new highs, the rally rests on fewer stocks.' },
+      { k: 'Within 5% of 52-week high', v: String(near), f: near / N,
+        d: 'Members trading at 95% or more of their highest close in the past year.' },
+      { k: 'New 52-week high, last 10 sessions', v: String(hi), f: hi / N,
+        d: 'Members whose highest close of the last 10 sessions beats every close in the 242 sessions before.' },
+      { k: 'New 52-week low, last 10 sessions', v: String(lo), f: lo / N,
+        d: 'The same with lows. Healthy markets show far more new highs than new lows.' },
     ];
-    $('dx-breadth-table').querySelector('tbody').replaceChildren(...rows.map(([k, v, f]) => {
-      const tr = el('tr'), bar = el('td', { className: 'l' }), b = el('span', { className: 'minibar' }), i = el('i');
-      i.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; b.appendChild(i); bar.appendChild(b);
-      tr.append(el('td', { className: 'l', textContent: k }), el('td', { textContent: v }), bar);
+    const tones = ['up', 'down', 'flat'];
+    $('dx-breadth-table').querySelector('tbody').replaceChildren(...rows.map((r) => {
+      const tr = el('tr'), name = el('td', { className: 'l' }), bar = el('td', { className: 'l' }), b = el('span', { className: 'minibar' });
+      name.append(el('div', { className: 'dx-mname', textContent: r.k }), el('div', { className: 'dx-desc', textContent: r.d }));
+      if (r.parts) {
+        b.classList.add('stack');
+        b.title = `${r.parts[0]} up, ${r.parts[1]} down, ${r.parts[2]} unchanged of ${N}`;
+        r.parts.forEach((p, i) => { if (!p) return; const s = el('i', { className: tones[i] }); s.style.width = (p / N * 100) + '%'; b.appendChild(s); });
+      } else {
+        const i = el('i'); i.style.width = Math.round(Math.max(0, Math.min(1, r.f)) * 100) + '%'; b.appendChild(i);
+      }
+      bar.appendChild(b);
+      tr.append(name, el('td', { className: 'dx-mval', textContent: r.v }), bar);
       return tr;
     }));
   }

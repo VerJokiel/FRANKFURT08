@@ -421,3 +421,14 @@ footer { color: var(--slate); border-top-color: #d8d0bf; }
 .dx-fresh.is-live::before { background: #6fd08c; opacity: 1; animation: dx-pulse 1.6s ease-in-out infinite; }
 #page-dax > [data-needs-data] > .dx-fresh, #dx-macro > .dx-fresh { color: var(--slate); }
 @media (prefers-reduced-motion: reduce) { .dx-fresh.is-live::before { animation: none; } }
+/* market internals: description under each measure, stacked up/down/unchanged bar */
+.dx-internals td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
+.dx-internals td.l:first-child { white-space: normal; min-width: 14rem; max-width: 30rem; }
+.dx-mname { font-weight: 600; }
+.dx-desc { font-size: .78rem; line-height: 1.4; color: var(--muted); margin-top: 2px; }
+.dx-mval { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.minibar.stack { display: inline-flex; }
+.minibar.stack i { border-radius: 0; }
+.minibar.stack i.up { background: #66bd63; }
+.minibar.stack i.down { background: #f46d43; }
+.minibar.stack i.flat { background: rgba(243,239,230,.45); }
