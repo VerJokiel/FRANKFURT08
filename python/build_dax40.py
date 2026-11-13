@@ -299,4 +299,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            # every SystemExit with a message means "bad or incomplete download, published file kept":
+            # report it as a warning on the Actions run, not as a failure (failures e-mail the owner)
+            print(f"::warning title=DAX data kept::{e.code}", flush=True)
+            sys.exit(0)
+        raise
