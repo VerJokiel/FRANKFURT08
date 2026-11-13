@@ -380,6 +380,25 @@ def run(mid: str, period: str) -> bool:
     start = pd.Timestamp.today().normalize() - pd.DateOffset(years=years, days=7)
     want = ["INDEX"] + [x[0] for x in m["members"]]
     gaps = [t for t in want if t not in close or close[t].notna().sum() < 50]
+    if gaps and len(close):
+        # a batch download sometimes drops a symbol (seen for Schneider Electric): ask Yahoo again, one by one
+        import yfinance as yf  # noqa: PLC0415
+        ysym = {"INDEX": m["index_yf"], **{x[0]: x[1] for x in m["members"]}}
+        for t in list(gaps):
+            for attempt in range(2):
+                try:
+                    one = yf.download(ysym[t], period=period, interval="1d", auto_adjust=True, progress=False)["Close"]
+                    one = (one.iloc[:, 0] if isinstance(one, pd.DataFrame) else one).dropna()
+                    one.index = pd.to_datetime(one.index).tz_localize(None).normalize()
+                    if len(one) >= 50:
+                        close = close.reindex(close.index.union(one.index))
+                        close[t] = one
+                        gaps.remove(t)
+                        log(f"{mid}: {t} fetched on its own after the batch download missed it")
+                        break
+                except Exception as e:  # noqa: BLE001
+                    log(f"{mid}: single retry {t} failed: {e}")
+                time.sleep(3)
     if gaps:
         log(f"{mid}: filling from Stooq:", ", ".join(gaps))
         for t in gaps:
