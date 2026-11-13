@@ -85,11 +85,11 @@ WIG20 = [  # after the March 2026 annual revision (Tauron for Orange Polska); Se
     ("PEO", "PEO.WA", "Bank Pekao", "Banks", 11.0), ("PZU", "PZU.WA", "PZU", "Insurance & Finance", 8.0),
     ("KGH", "KGH.WA", "KGHM", "Materials & Industrials", 7.0), ("LPP", "LPP.WA", "LPP", "Consumer & Retail", 5.0),
     ("ALE", "ALE.WA", "Allegro", "Consumer & Retail", 4.0), ("DNP", "DNP.WA", "Dino Polska", "Consumer & Retail", 4.0),
-    ("SPL", "SPL.WA", "Erste Bank Polska", "Banks", 4.0), ("CDR", "CDR.WA", "CD Projekt", "Tech & Media", 4.0),
+    ("EBP", "EBP.WA", "Erste Bank Polska", "Banks", 4.0), ("CDR", "CDR.WA", "CD Projekt", "Tech & Media", 4.0),
     ("MBK", "MBK.WA", "mBank", "Banks", 4.0), ("ZAB", "ZAB.WA", "Żabka", "Consumer & Retail", 3.0),
     ("PGE", "PGE.WA", "PGE", "Energy & Utilities", 3.0), ("ALR", "ALR.WA", "Alior Bank", "Banks", 2.0),
     ("KTY", "KTY.WA", "Grupa Kęty", "Materials & Industrials", 2.0), ("TPE", "TPE.WA", "Tauron", "Energy & Utilities", 2.0),
-    ("KRU", "KRU.WA", "Kruk", "Insurance & Finance", 2.0), ("CCC", "CCC.WA", "Modivo (CCC)", "Consumer & Retail", 2.0),
+    ("KRU", "KRU.WA", "Kruk", "Insurance & Finance", 2.0), ("MDV", "MDV.WA", "Modivo", "Consumer & Retail", 2.0),
     ("BDX", "BDX.WA", "Budimex", "Materials & Industrials", 1.5), ("PCO", "PCO.WA", "Pepco", "Consumer & Retail", 1.5),
 ]
 
