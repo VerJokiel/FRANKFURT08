@@ -122,7 +122,7 @@ Risk layers and crisis analysis: see [RISK_METHODOLOGY.md](RISK_METHODOLOGY.md) 
 
 ## Change log
 
-- **2026-11-13** — European market pages for CAC 40, IBEX 35, FTSE MIB, WIG20 and FTSE 100: configuration `python/markets.py`, page generator, `assets/market.js` and `market-live.js`, daily builder `build_market.py`, 5-minute builder `build_market_live.py` with a bad-print filter, session job `markets_loop.py` / `live-markets.yml` (started with the DAX job) and backup `update-markets.yml`. Correlation views limited to the 20 largest members. Market links added to the tab bars.
+- **2026-11-13** — European market pages for CAC 40, IBEX 35, FTSE MIB, WIG20 and FTSE 100: configuration `python/markets.py`, page generator, `assets/market.js` and `market-live.js`, daily builder `build_market.py`, 5-minute builder `build_market_live.py` with a bad-print filter, session job `markets_loop.py` / `live-markets.yml` (started with the DAX job) and backup `update-markets.yml`. Correlation views limited to the 20 largest members. Market links added to the tab bars. Later the same day: `build_market.py` fetches a member again on its own when Yahoo's batch download drops it.
 
 - **2026-11-13** — Morning start moved to a weekday Claude scheduled task (08:10 Frankfurt). Kept data files now end the run with a warning instead of a failure. Added this guide and `CLAUDE.md`.
 - **2026-11-12** — Session-long live job replaces the 5-minute cron. Daily data refreshed before the open as well as after the close, plus backup runs. Guards against older data, carry-over of market caps and ECB series, unchanged files not rewritten. Open pages reload new daily data. Market internals: description under each measure, unchanged stocks shown.
