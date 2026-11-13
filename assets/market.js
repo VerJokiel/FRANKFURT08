@@ -69,9 +69,10 @@
   };
   window.MarketSchedule = Schedule;
 
-  /* on narrow screens the tab bar scrolls sideways: bring this page's tab into view */
-  const navCur = document.querySelector('.tabs [aria-current="page"]');
-  if (navCur) { const nav = navCur.parentElement; if (nav.scrollWidth > nav.clientWidth) nav.scrollLeft = navCur.offsetLeft - (nav.clientWidth - navCur.offsetWidth) / 2; }
+  /* on narrow screens the tab bars scroll sideways: bring this page's tabs into view */
+  document.querySelectorAll('.tabs [aria-current="page"], .subtabs [aria-current="page"]').forEach((cur) => {
+    const nav = cur.parentElement; if (nav.scrollWidth > nav.clientWidth) nav.scrollLeft = cur.offsetLeft - nav.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2;
+  });
 
   const D = window.MKT;
   const $ = (id) => document.getElementById(id);

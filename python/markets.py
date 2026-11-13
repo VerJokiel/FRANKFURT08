@@ -235,3 +235,25 @@ MARKETS = {
     },
 }
 ORDER = ["cac40", "ibex35", "ftsemib", "wig20", "ftse100"]
+
+# ------------------------------------------------------------------ Market View (markets.html)
+# Every index page, in the order of the Market View sub-navigation. The DAX page keeps its own
+# scripts and data file (data/dax40.js, live.json on the live-data branch); the others follow MARKETS.
+DAX_VIEW = {
+    "id": "dax40", "page": "dax.html", "name": "DAX", "country": "Germany", "exchange": "Xetra", "city": "Frankfurt",
+    "tz": "Europe/Berlin", "open": "09:00", "close": "17:30", "currency": "EUR",
+    "data": "data/dax40.js", "series": "dax", "live_branch": "live-data", "live_file": "live.json", "live_key": "DAX",
+    # must match XETRA_HOLIDAYS in assets/dax.js and HOLIDAYS in python/live_loop.py
+    "holidays": ["2026-12-24", "2026-12-25", "2026-12-31", "2027-01-01", "2027-03-26", "2027-03-29", "2027-12-24", "2027-12-31"],
+}
+
+
+def view_entries() -> list[dict]:
+    out = [DAX_VIEW]
+    for mid in ORDER:
+        m = MARKETS[mid]
+        out.append({"id": mid, "page": m["page"], "name": m["name"], "country": m["country"], "exchange": m["exchange"],
+                    "city": m["city"], "tz": m["tz"], "open": m["open"], "close": m["close"], "currency": m["currency"],
+                    "data": f"data/markets/{mid}.js", "series": "index", "live_branch": "live-markets",
+                    "live_file": f"{mid}.json", "live_key": "INDEX", "holidays": m["holidays"]})
+    return out

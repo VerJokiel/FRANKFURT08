@@ -1,5 +1,7 @@
-"""Write the five European market pages (cac40.html, ibex35.html, ftsemib.html, wig20.html, ftse100.html)
-from one template and the configuration in python/markets.py.
+"""Write the Market View pages from python/markets.py: the overview of all indices (markets.html),
+the five European market pages (cac40.html, ibex35.html, ftsemib.html, wig20.html, ftse100.html) from one
+template, and the navigation of index.html and dax.html (one "Market View" tab in the main bar, and on
+every index page a second bar with All indices · DAX · CAC 40 · …).
 
     python python/make_market_pages.py
 
@@ -17,7 +19,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-from markets import MARKETS, ORDER  # noqa: E402
+from markets import MARKETS, ORDER, view_entries  # noqa: E402
 
 CCY_TEXT = {"EUR": "Prices in euros.", "PLN": "Prices in złoty.", "GBP": "Prices in pence (p), as quoted on the London Stock Exchange."}
 
@@ -42,22 +44,26 @@ SOURCES_NOTE = {
 }
 
 
-def nav(current: str | None) -> str:
-    links = [("index.html#overview", "Overview"), ("index.html#thesis", "Investment thesis"), ("index.html#vol", "Weekly volatility"),
+MAIN_TABS = [("index.html#overview", "Overview"), ("index.html#thesis", "Investment thesis"), ("index.html#vol", "Weekly volatility"),
              ("index.html#corr", "Correlation matrix"), ("index.html#risk", "Short-term risk"), ("index.html#ltrisk", "Long-term risk"),
              ("index.html#crises", "Crisis history")]
-    out = [f'    <a class="tab-link" href="{h}">{t}</a>' for h, t in links]
-    out.append('    <a class="tab-link dax-link" href="dax.html">DAX market</a>')
-    for mid in ORDER:
-        m = MARKETS[mid]
-        cur = ' aria-current="page"' if mid == current else ""
-        out.append(f'    <a class="tab-link dax-link" href="{m["page"]}"{cur}>{m["name"]}</a>')
+
+
+def nav(current: str | None) -> str:
+    """Main tab bar plus the Market View bar, for markets.html, dax.html and the five market pages.
+    current: 'view' for markets.html, otherwise the page file name of the index."""
+    out = ['  <nav class="tabs" aria-label="Dashboard pages">']
+    out += [f'    <a class="tab-link" href="{h}">{t}</a>' for h, t in MAIN_TABS]
+    out.append('    <a class="tab-link dax-link" href="markets.html" aria-current="page">Market View</a>')
+    out.append("  </nav>")
+    out.append('  <nav class="subtabs" aria-label="Market View">')
+    cur = ' aria-current="page"' if current == "view" else ""
+    out.append(f'    <a class="subtab-link all" href="markets.html"{cur}>All indices</a>')
+    for e in view_entries():
+        cur = ' aria-current="page"' if e["page"] == current else ""
+        out.append(f'    <a class="subtab-link" href="{e["page"]}"{cur}><span>{e["name"]}</span><small>{e["country"]}</small></a>')
+    out.append("  </nav>")
     return "\n".join(out)
-
-
-def market_nav_buttons(current: str | None) -> str:
-    """The same market links as plain tab buttons for index.html and dax.html (written by update_navs)."""
-    return "\n".join(f'    <a class="tab-link dax-link" href="{MARKETS[mid]["page"]}">{MARKETS[mid]["name"]}</a>' for mid in ORDER if mid != current)
 
 
 def page(mid: str) -> str:
@@ -98,9 +104,7 @@ def page(mid: str) -> str:
     <div class="palette-strip" aria-hidden="true"><i style="flex:6;background:#24395f"></i><i style="flex:3;background:var(--sage-2)"></i><i style="flex:1;background:var(--alabaster)"></i><i style="flex:.6;background:var(--gold)"></i></div>
   </header>
 
-  <nav class="tabs" aria-label="Dashboard pages">
-{nav(mid)}
-  </nav>
+{nav(m["page"])}
 
   <section class="page theme-a" id="page-mkt">
     <div class="card" id="dx-empty" hidden>
@@ -301,31 +305,162 @@ def page(mid: str) -> str:
 """
 
 
-START, END = "<!-- market links: python/make_market_pages.py -->", "<!-- /market links -->"
+VIEW_COLORS = ["#d6b062", "#7fd1d8", "#f2948a", "#9fcb9b", "#c7a8e8", "#a3b8de"]
+
+
+def view_page() -> str:
+    entries = view_entries()
+    cfg = [{k: e[k] for k in ("id", "page", "name", "country", "exchange", "city", "tz", "open", "close", "currency", "data", "series",
+                              "live_branch", "live_file", "live_key", "holidays")} | {"color": VIEW_COLORS[i % len(VIEW_COLORS)]}
+           for i, e in enumerate(entries)]
+    names = ", ".join(e["name"] for e in entries[:-1]) + " and " + entries[-1]["name"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13233f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<title>Market View · FRANKFURT08</title>
+<meta name="description" content="All tracked equity indices side by side from real data: {names}. Levels, returns, risk, breadth, correlation between the markets, with 5-minute prices during the session.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- generated by python/make_market_pages.py from python/markets.py; edit those, not this file -->
+<script>window.MARKET_VIEW = {json.dumps(cfg, ensure_ascii=False)};</script>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <p class="kicker">FRANKFURT08 · Market View</p>
+    <h1>European equity indices</h1>
+    <p class="lede">Every index tracked on this site side by side: {names}. Where each one stands, how they compare on return and risk, and how closely they move together. Daily closes after each session, 5-minute prices while the markets trade. Open any index for its full page.</p>
+    <div class="palette-strip" aria-hidden="true"><i style="flex:6;background:#24395f"></i><i style="flex:3;background:var(--sage-2)"></i><i style="flex:1;background:var(--alabaster)"></i><i style="flex:.6;background:var(--gold)"></i></div>
+  </header>
+
+{nav("view")}
+
+  <section class="page theme-a" id="page-view">
+    <div class="dx-updates">
+      <div class="dx-live-bar" role="status" aria-live="polite"><span class="dx-pill waiting" id="mv-pill">Loading</span><span id="mv-status">Loading the data of {len(entries)} indices…</span></div>
+      <p class="dx-next"><b>Updates:</b> <span id="mv-next">5-minute prices are checked every minute while any market trades; daily closes arrive after each session (about 18:10 Frankfurt time).</span></p>
+    </div>
+    <p class="dx-alert" id="mv-error" hidden></p>
+
+    <h2 class="section-title">The indices today</h2>
+    <p class="note mv-intro">Each card: level and change on the day (from 5-minute prices while the exchange is open), the last year with its 200-day average, and returns and risk at a glance. Tap a card to open the index page.</p>
+    <div class="mv-cards" id="mv-cards"></div>
+
+    <h2 class="section-title">Performance compared</h2>
+    <div class="card" data-feed="mixed">
+      <div class="controls">
+        <span class="label">Since</span>
+        <div class="seg" id="mv-period" role="group" aria-label="Comparison period">
+          <button type="button" data-p="21" aria-pressed="false">1 month</button>
+          <button type="button" data-p="63" aria-pressed="false">3 months</button>
+          <button type="button" data-p="ytd" aria-pressed="false">Year to date</button>
+          <button type="button" data-p="252" aria-pressed="true">1 year</button>
+          <button type="button" data-p="all" aria-pressed="false">2 years</button>
+        </div>
+      </div>
+      <p class="note">Each index rebased to 100 at the start of the period, in its own currency (euro, złoty, pound). The DAX is a performance index that reinvests dividends; the others are price indices, so over a year the DAX gains roughly its dividend yield (about 2–3%) on them.</p>
+      <div id="mv-perf" class="box"></div>
+    </div>
+
+    <h2 class="section-title">Side by side</h2>
+    <div class="card" data-feed="mixed">
+      <p class="note">Click a column to sort. Returns over 1, 5, 21 and 252 sessions; volatility is the annualised standard deviation of daily returns; VaR and ES come from the last 252 daily returns; breadth is the share of members above their 200-day average; average correlation is the mean pairwise correlation of the members' daily returns over three months.</p>
+      <div class="tablewrap"><table class="compact mv-table" id="mv-table"><thead><tr></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <div class="card" data-feed="mixed">
+        <h2>Return and risk, last year</h2>
+        <p class="note">One-year return against one-year volatility. Up and to the left is more return for less risk.</p>
+        <div id="mv-scatter" class="box"></div>
+      </div>
+      <div class="card" data-feed="mixed">
+        <h2>How the indices move together</h2>
+        <div class="controls">
+          <span class="label">Daily returns over</span>
+          <div class="seg" id="mv-cwin" role="group" aria-label="Correlation window">
+            <button type="button" data-w="63" aria-pressed="false">3 months</button>
+            <button type="button" data-w="252" aria-pressed="true">1 year</button>
+          </div>
+        </div>
+        <p class="note">Correlation of the indices' daily returns on days all of them traded, in local currency. All six close between 17:30 and 17:35 Central European time, so same-day returns line up.</p>
+        <div id="mv-corr" class="box"></div>
+        <div class="legend" id="mv-corr-scale"></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Data and method</h2>
+    <div class="card">
+      <ul class="dx-method">
+        <li><b>Data:</b> the same files as the index pages: daily closes (Yahoo Finance via yfinance, adjusted for dividends and splits) in <code>data/dax40.js</code> and <code>data/markets/&lt;id&gt;.js</code>, refreshed after each session; 5-minute bars from the <code>live-data</code> (DAX) and <code>live-markets</code> branches, delayed about 15 minutes by the source.</li>
+        <li><b>Today:</b> while an exchange is open, its index and members get a provisional price for today (last close × latest 5-minute price ÷ previous close), and every figure for that index includes it. Closed exchanges show their last close.</li>
+        <li><b>Currencies:</b> every index is measured in its own currency. For a euro investor the WIG20 and the FTSE 100 also carry the złoty and pound exchange rate, which the index pages show.</li>
+        <li><b>Members:</b> current members only (survivorship); weights are approximations from market capitalisation. Each index page explains its own data in detail.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <p>Data: Yahoo Finance (via yfinance). Intraday prices are 5-minute bars delayed about 15 minutes by the source; nothing on this page is real-time.</p>
+    <p>For educational purposes only; not investment advice.</p>
+    <p>The information provided on this page is for informational and educational purposes only and does not constitute general or personal investment advice, a personal recommendation, or an offer or solicitation to buy or sell any financial instruments. It does not take into account the specific investment objectives, financial situation, or particular needs of any individual recipient. Within the meaning of Directive 2014/65/EU (MiFID II), this content is deemed generic information or marketing communication and does not establish a fiduciary or advisory relationship.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="assets/market-view.js"></script>
+</body>
+</html>
+"""
+
+
+NAV_START, NAV_END = "<!-- nav: python/make_market_pages.py -->", "<!-- /nav -->"
+LINK_START, LINK_END = "<!-- market view link: python/make_market_pages.py -->", "<!-- /market view link -->"
+
+
+def _between(s: str, a: str, b: str, block: str) -> str:
+    i, j = s.index(a), s.index(b) + len(b)
+    return s[:i] + block + s[j:]
 
 
 def update_navs() -> None:
-    """Keep the market links in the tab bars of index.html and dax.html in step with markets.py."""
-    block = START + "\n" + market_nav_buttons(None) + "\n    " + END
-    for name in ("index.html", "dax.html"):
-        p = ROOT / name
-        s = p.read_text(encoding="utf-8")
-        if START in s:
-            a, b = s.index(START), s.index(END) + len(END)
-            s = s[:a] + block + s[b:]
-        else:
-            anchor = s.index('dax.html', s.index('class="tab-link dax-link"'))
-            line_end = s.index("</a>", anchor) + len("</a>")
-            s = s[:line_end] + "\n    " + block + s[line_end:]
-        p.write_text(s, encoding="utf-8")
+    """index.html: one Market View tab in its tab bar. dax.html: the same navigation as the market pages."""
+    p = ROOT / "index.html"
+    s = p.read_text(encoding="utf-8")
+    link = LINK_START + '\n    <a class="tab-link dax-link" href="markets.html">Market View</a>\n    ' + LINK_END
+    if LINK_START in s:
+        s = _between(s, LINK_START, LINK_END, link)
+    else:  # first run: replace the old DAX link and per-market links
+        a = s.index('<a class="tab-link dax-link" href="dax.html">')
+        b = s.index("<!-- /market links -->") + len("<!-- /market links -->") if "<!-- /market links -->" in s else s.index("</a>", a) + 4
+        s = s[:a] + link + s[b:]
+    p.write_text(s, encoding="utf-8")
+
+    p = ROOT / "dax.html"
+    s = p.read_text(encoding="utf-8")
+    block = NAV_START + "\n" + nav("dax.html") + "\n  " + NAV_END
+    if NAV_START in s:
+        s = _between(s, NAV_START, NAV_END, block)
+    else:
+        a = s.index('<nav class="tabs"')
+        b = s.index("</nav>", a) + len("</nav>")
+        s = s[:a] + block + s[b:]
+    p.write_text(s, encoding="utf-8")
 
 
 def main() -> None:
+    (ROOT / "markets.html").write_text(view_page(), encoding="utf-8")
+    print("wrote markets.html")
     for mid in ORDER:
         (ROOT / MARKETS[mid]["page"]).write_text(page(mid), encoding="utf-8")
         print("wrote", MARKETS[mid]["page"])
     update_navs()
-    print("updated tab bars in index.html and dax.html")
+    print("updated the navigation of index.html and dax.html")
 
 
 if __name__ == "__main__":

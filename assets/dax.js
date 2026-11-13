@@ -4,6 +4,11 @@
    During the session, assets/dax-live.js calls DaxDaily.applyLive() with the latest 5-minute
    prices; they are added as a provisional row for today and every view below is rebuilt. */
 (() => {
+  /* on narrow screens the tab bars scroll sideways: bring this page's tabs into view */
+  document.querySelectorAll('.tabs [aria-current="page"], .subtabs [aria-current="page"]').forEach((cur) => {
+    const nav = cur.parentElement; if (nav.scrollWidth > nav.clientWidth) nav.scrollLeft = cur.offsetLeft - nav.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2;
+  });
+
   /* ---------- update schedule, in Frankfurt time (shared with assets/dax-live.js) ---------- */
   // Xetra trading holidays on weekdays; check the Deutsche Börse calendar each December and extend.
   const XETRA_HOLIDAYS = new Set(['2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01', '2027-03-26', '2027-03-29', '2027-12-24', '2027-12-31']);
