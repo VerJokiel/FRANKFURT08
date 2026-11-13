@@ -51,8 +51,31 @@ def window(day: datetime) -> tuple[datetime, datetime] | None:
             day.replace(hour=CLOSE[0], minute=CLOSE[1], second=0, microsecond=0))
 
 
+BOT = {"GIT_AUTHOR_NAME": "github-actions[bot]", "GIT_AUTHOR_EMAIL": "41898283+github-actions[bot]@users.noreply.github.com",
+       "GIT_COMMITTER_NAME": "github-actions[bot]", "GIT_COMMITTER_EMAIL": "41898283+github-actions[bot]@users.noreply.github.com"}
+
+
 def git(*args, cwd=None, check=True):
-    return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True)
+    # a fixed identity for every git call: `pull --rebase` re-commits and fails without a committer
+    return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True, env={**os.environ, **BOT})
+
+
+def push_main(cwd) -> bool:
+    """Rebase the local data commit onto the current main and push; True only if main now has it."""
+    for _ in range(3):
+        r = git("pull", "-q", "--rebase", "-X", "theirs", remote_url(), "main", cwd=cwd, check=False)
+        if r.returncode:   # generated files only: on a conflict this run's fresh build wins (-X theirs)
+            log("rebase failed:", (r.stderr or r.stdout).strip()[-300:])
+            git("rebase", "--abort", cwd=cwd, check=False)
+        else:
+            p = git("push", "-q", remote_url(), "HEAD:main", cwd=cwd, check=False)
+            head = git("rev-parse", "HEAD", cwd=cwd).stdout.strip()
+            remote = git("ls-remote", remote_url(), "refs/heads/main", cwd=cwd, check=False).stdout.split()
+            if not p.returncode and remote and remote[0] == head:
+                return True
+            log("push failed:", (p.stderr or "main does not have the commit").strip()[-300:])
+        time.sleep(10)
+    return False
 
 
 def remote_url() -> str | None:
@@ -123,13 +146,10 @@ def daily_closes(dry: bool, wait: bool = True) -> None:
     stamp = datetime.now(BERLIN).strftime("%Y-%m-%d")
     git("-c", "user.name=github-actions[bot]", "-c", "user.email=41898283+github-actions[bot]@users.noreply.github.com",
         "commit", "-q", "-m", f"Update DAX market data ({stamp})", cwd=ROOT)
-    for _ in range(3):
-        git("pull", "-q", "--rebase", remote_url(), "main", cwd=ROOT, check=False)
-        if not git("push", "-q", remote_url(), "HEAD:main", cwd=ROOT, check=False).returncode:
-            log("daily data committed")
-            return
-        time.sleep(10)
-    log("daily push failed")
+    if push_main(ROOT):
+        log("daily data committed")
+    else:
+        print("::warning title=Daily data not committed::the daily data commit could not be pushed to main", flush=True)
 
 
 def restart(dry: bool) -> None:
