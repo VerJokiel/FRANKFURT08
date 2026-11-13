@@ -1,0 +1,58 @@
+name: Update European market data
+
+# Backup for data/markets/*.js (closes, market caps, rates and currency of the five European market
+# pages). The session job in live-markets.yml normally commits them at ~18:10 Frankfurt and refreshes
+# them before the next open; these runs catch anything it missed. A run that finds nothing new commits
+# nothing, and build_market.py never replaces newer data with older.
+on:
+  schedule:
+    - cron: "30 18 * * 1-5"    # 19:30 CET / 20:30 CEST
+    - cron: "50 20 * * 1-5"    # 21:50 CET / 22:50 CEST
+    - cron: "20 4 * * 2-6"     # next morning 05:20 CET / 06:20 CEST
+    - cron: "45 11 * * 1-5"    # midday: picks up the ECB yield curve, published around noon
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - python/build_market.py
+      - python/markets.py
+      - .github/workflows/update-markets.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-markets
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r python/requirements.txt
+
+      - name: Fetch prices, market caps, rates and currency
+        run: python python/build_market.py all --period 2y
+
+      - name: Commit if the data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/markets
+          if git diff --cached --quiet; then
+            echo "No change in data."
+          else
+            git commit -m "Update European market data ($(date -u +%Y-%m-%d))"
+            git pull --rebase -X theirs origin main   # generated files only: this run's build wins
+            git push
+          fi

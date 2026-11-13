@@ -1,0 +1,57 @@
+name: Live market bars
+
+# One long-running job per trading day publishes 5-minute bars for the five European market pages
+# (CAC 40, IBEX 35, FTSE MIB, WIG20, FTSE 100) to the `live-markets` branch, one file per market
+# (python/markets_loop.py keeps its own 5-minute clock; the pages poll their file every 30 seconds).
+# Same design as live-dax40.yml. It starts with the DAX job (workflow_run below), so the morning
+# start of the DAX job also starts this one; the crons are redundant back-ups because GitHub starts
+# scheduled runs late or skips them. Later starts queue behind the running job (concurrency) and exit
+# when there is nothing to do. Before the 6-hour limit the job starts a fresh run of itself. After
+# the close it commits the official daily closes (update-markets.yml stays as a backup).
+on:
+  workflow_run:
+    workflows: ["Live DAX bars"]
+    types: [requested]
+  schedule:
+    - cron: "35,50 5 * * 1-5"
+    - cron: "5,20,35,50 6-7 * * 1-5"
+    - cron: "20,50 8-14 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - python/build_market_live.py
+      - python/markets_loop.py
+      - .github/workflows/live-markets.yml
+
+permissions:
+  contents: write
+  actions: write   # lets the job start its own follow-up run
+
+concurrency:
+  group: live-markets
+  cancel-in-progress: false
+
+jobs:
+  session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r python/requirements.txt
+
+      - name: Publish bars through the session
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: main
+        run: python python/markets_loop.py

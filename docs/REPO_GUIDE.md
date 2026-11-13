@@ -2,7 +2,7 @@
 
 How this repository is built, where the data comes from, how it is kept up to date, and what needs looking after. Keep this file current: update it in the same commit as any change to the pages, data jobs, schedules, colour conventions or methodology, and add a line to the [change log](#change-log).
 
-Site (GitHub Pages, branch `main`, root): [three-pillar dashboard](https://verjokiel.github.io/FRANKFURT08/) · [DAX market page](https://verjokiel.github.io/FRANKFURT08/dax.html)
+Site (GitHub Pages, branch `main`, root): [three-pillar dashboard](https://verjokiel.github.io/FRANKFURT08/) · [DAX market page](https://verjokiel.github.io/FRANKFURT08/dax.html) · European market pages: [CAC 40](https://verjokiel.github.io/FRANKFURT08/cac40.html), [IBEX 35](https://verjokiel.github.io/FRANKFURT08/ibex35.html), [FTSE MIB](https://verjokiel.github.io/FRANKFURT08/ftsemib.html), [WIG20](https://verjokiel.github.io/FRANKFURT08/wig20.html), [FTSE 100](https://verjokiel.github.io/FRANKFURT08/ftse100.html)
 
 ## Pages
 
@@ -14,6 +14,12 @@ Site (GitHub Pages, branch `main`, root): [three-pillar dashboard](https://verjo
 - An open page checks for a newer daily data file every 15 minutes and reloads when one is published.
 - Sections: headline figures, intraday chart, correlation (matrix, network, sector clusters), market map, biggest moves, market internals, index charts, breadth, average correlation, dispersion, sectors, rates and EUR/USD, data and method.
 
+**`cac40.html`, `ibex35.html`, `ftsemib.html`, `wig20.html`, `ftse100.html` — European market pages.** The DAX page's layout and behaviour (update box, per-panel update lines, live splice, reload on new daily data) for CAC 40 (40 members), IBEX 35 (35), FTSE MIB (40), WIG20 (20) and FTSE 100 (100), from real data. Differences from the DAX page:
+- The correlation matrix, network and sector clusters show the 20 largest members by index weight (`corr_n` in `python/markets.py`; all 20 for the WIG20). Average correlation, breadth, the market map and the sector table use all members.
+- Times are the exchange's local time (Paris, Madrid, Milan, Warsaw, London). Prices are in the quote currency: euros, złoty, pence (a few London lines quote in US dollars).
+- Rates and currency per market: euro markets show the ECB deposit rate, 10-year AAA yield, the country's 10-year yield (monthly) and its spread over Germany, and EUR/USD; WIG20 the NBP reference rate, 10-year Polish yield (monthly), EUR/PLN and USD/PLN; FTSE 100 Bank Rate, 10-year gilt yield, GBP/USD and GBP/EUR.
+- The pages are generated: edit `python/markets.py` or the template in `python/make_market_pages.py`, then run `python python/make_market_pages.py` (it also rewrites the market links in the tab bars of `index.html` and `dax.html`, between the `market links` comments).
+
 ## Code layout
 
 Static site, no build step. d3 v7.9.0 from cdnjs; on `dax.html` also Chart.js 4.4.1, chartjs-chart-matrix 2.0.1 and Cytoscape.js 3.28.1.
@@ -24,11 +30,12 @@ Static site, no build step. d3 v7.9.0 from cdnjs; on `dax.html` also Chart.js 4.
 | `assets/risk.js`, `ltrisk.js`, `crises.js`, `fan.js`, `thesis.js` | Risk layer 1, risk layer 2, crisis history, fan chart, investment-thesis checks. |
 | `assets/dax.js` | `window.DaxSchedule` (Frankfurt-time helpers and the `XETRA_HOLIDAYS` list) and the daily views of `dax.html`. `DaxDaily.applyLive()` rebuilds every view with a provisional row for today; `DaxDaily.stamp()` writes the per-panel update lines. |
 | `assets/dax-live.js` | Polls the live file every 30 s; update box; daily-file reload check; intraday chart (Chart.js); correlation matrix (chartjs-chart-matrix), force-directed network (D3: minimum spanning tree or threshold) and sector clusters (Cytoscape.js). |
+| `assets/market.js`, `assets/market-live.js` | European market pages: market-independent versions of `dax.js` and `dax-live.js`, configured by `window.MARKET` (inlined in each page) and fed by `window.MKT` (`data/markets/<id>.js`). `window.MarketSchedule`, `MarketDaily.applyLive()`, `MarketDaily.stamp()` as on the DAX page. The correlation views use the `corr_n` largest members. |
 | `assets/style.css` | Palette and all styles. Direction A (`.theme-a`): navy `#13233F` and sage `#3E5F44` panels, alabaster `#F3EFE6` canvas, gold `#C9A55A` accent, Newsreader headings, Inter body. Direction B (`.theme-b`, risk tabs): light fintech look with teal `#24BDC8`. |
-| `data/` | `data.js` (nine-stock prices), `longterm.js` (25 years), `benchmark_dax.csv`, `dax40.js` and `dax40_prices.csv` (generated, do not edit by hand). |
-| `python/` | `risk_metrics.py` and `longterm_risk.py` (reference implementations), `build_dax40.py` (daily DAX data), `build_live.py` (one fetch of 5-minute bars), `live_loop.py` (runs the live layer through a session), `requirements.txt`. |
+| `data/` | `data.js` (nine-stock prices), `longterm.js` (25 years), `benchmark_dax.csv`, `dax40.js` and `dax40_prices.csv` (generated, do not edit by hand), `markets/<id>.js` and `markets/<id>_prices.csv` for the European market pages (generated, do not edit by hand). |
+| `python/` | `risk_metrics.py` and `longterm_risk.py` (reference implementations), `build_dax40.py` (daily DAX data), `build_live.py` (one fetch of 5-minute bars), `live_loop.py` (runs the live layer through a session), `requirements.txt`. European market pages: `markets.py` (single source of truth: members and Yahoo tickers, sectors, hours, time zones, holidays, weight caps, rates sources), `build_market.py` (daily data, `all` or one market id), `build_market_live.py` (5-minute bars for one market), `markets_loop.py` (session job for all five), `make_market_pages.py` (writes the pages). |
 | `docs/` | `INVESTMENT_THESIS.md`, `RISK_METHODOLOGY.md`, `CRISIS_HISTORY.md`, this guide. |
-| `.github/workflows/` | `live-dax40.yml` (session job), `update-dax40.yml` (backup daily data). |
+| `.github/workflows/` | `live-dax40.yml` (session job), `update-dax40.yml` (backup daily data), `live-markets.yml` and `update-markets.yml` (the same for the European market pages). |
 
 ## Data and automation (DAX market page)
 
@@ -59,6 +66,23 @@ Static site, no build step. d3 v7.9.0 from cdnjs; on `dax.html` also Chart.js 4.
 - During the session it drops today's unfinished row from the daily data.
 
 **How the page reads the data.** `live.json` comes through the GitHub API (`contents/live.json?ref=live-data`), with `raw.githubusercontent.com` as fallback. Today's provisional prices are spliced onto the daily data only when the live file's previous session equals the daily file's last date (`live.prev_date === DAX40.asof`).
+
+## Data and automation (European market pages)
+
+**Sources:** Yahoo Finance via yfinance for prices, 5-minute bars and market caps (exchange quotes delayed about 15 minutes); ECB Data Portal for the euro rates, the countries' 10-year yields (`IRS`, monthly) and reference FX rates (`EXR`); BIS central bank policy rates (`WS_CBPOL`) for the NBP rate; Bank of England database for Bank Rate (`IUDBEDR`) and the 10-year gilt par yield (`IUDMNPY`), with BIS as fallback for Bank Rate. Stooq now answers scripts with a JavaScript challenge, so its fallback rarely works.
+
+**Session job (`live-markets.yml` → `python/markets_loop.py`).** One job for all five markets, same design as the DAX job. All five trade 09:00–17:30 Central European time (London 08:00–16:30 UK time, Warsaw until 17:00), so one window, 09:00–17:55 Frankfurt, covers them; a market on holiday, or past its close plus 25 minutes, is skipped. On start it loads the files already on the `live-markets` branch, fetches every market once, then every 5 minutes fetches the open markets and force-pushes one commit with `cac40.json`, `ibex35.json`, `ftsemib.json`, `wig20.json`, `ftse100.json`. Before the open it refreshes the daily data; after 18:05 Frankfurt it runs `build_market.py all` and commits `data/markets/` to `main`; before the 6-hour limit it starts a fresh run of itself. It starts when the DAX job is requested (`workflow_run` on *Live DAX bars*), so the 08:10 morning start covers both; its own crons are back-ups. Concurrency group `live-markets`.
+
+**Backup daily job (`update-markets.yml`).** 18:30 and 20:50 UTC, 04:20 UTC (Tuesday to Saturday) and 11:45 UTC, and on pushes to `build_market.py`, `markets.py` or the workflow. Commits only when data changed; on a rebase conflict in the generated files, this run's build wins (`-X theirs`), as in the session job.
+
+**Safeguards in `build_market.py`:** the same as `build_dax40.py` (keeps the published file when the index or more than `max_missing` members fail — 4, WIG20 3, FTSE 100 6; never moves data backwards; carries over market caps and rates series; writes nothing unchanged; drops today's unfinished session; a kept file is a warning, not a failure). In addition:
+- Members listed during the window count if they have a year of closes; earlier dates carry the first close back (the member gets `since` in the data file). Example: Metlen, in London since August 2025.
+- Market caps are converted to the market's currency (pence ÷ 100; dollar or euro lines at ECB rates) before weights are computed. Weight caps: CAC 40, FTSE MIB and WIG20 15%; IBEX 35 and FTSE 100 none.
+- Yahoo has no daily history for the WIG20 index (`WIG20.WA`): the script rebuilds it from hourly bars, taking the last bar of each Warsaw session (equal to the official close, checked against members). `build_market_live.py` takes the WIG20's previous close the same way.
+
+**Bad prints.** `build_market_live.py` blanks an isolated 5-minute bar that sits more than 0.6% away from both neighbours while the neighbours agree (seen on 9 Nov 2026 at 17:05 for every Paris stock). Without this, one bad bar dominates five days of 5-minute correlations.
+
+**How the pages read the data.** `<id>.json` through the GitHub API (`contents/<id>.json?ref=live-markets`), fallback `raw.githubusercontent.com`; splice condition `live.prev_date === MKT.asof`, as on the DAX page.
 
 ## Methodology notes
 
@@ -91,9 +115,13 @@ Risk layers and crisis analysis: see [RISK_METHODOLOGY.md](RISK_METHODOLOGY.md) 
 | After each quarterly DAX review (March, June, September, December) | Update `MEMBERS` in `python/build_dax40.py`; `build_live.py` imports it. |
 | Every December | Extend the Xetra holiday lists from the Deutsche Börse trading calendar, in both `XETRA_HOLIDAYS` in `assets/dax.js` and `HOLIDAYS` in `python/live_loop.py` (currently up to the end of 2027). |
 | If the page shows a stale-data warning | Check *Actions* for failed runs, then start *Live DAX bars* or *Update DAX market data* by hand. |
+| After each quarterly review of CAC 40, IBEX 35, FTSE MIB, WIG20, FTSE 100 (March, June, September, December; FTSE 100 also mid-quarter replacements after takeovers) | Update the member list in `python/markets.py` (code, Yahoo symbol, name, sector, fallback weight), then run `python python/make_market_pages.py` (member counts appear in the page text) and commit. |
+| Every December | Extend the holiday lists in `python/markets.py` (Euronext Paris, BME, Borsa Italiana, GPW, LSE; currently to the end of 2027), then run `make_market_pages.py`. |
 | After 60 days without repository activity | GitHub pauses scheduled workflows; the daily bot commits normally prevent this. |
 
 ## Change log
+
+- **2026-11-13** — European market pages for CAC 40, IBEX 35, FTSE MIB, WIG20 and FTSE 100: configuration `python/markets.py`, page generator, `assets/market.js` and `market-live.js`, daily builder `build_market.py`, 5-minute builder `build_market_live.py` with a bad-print filter, session job `markets_loop.py` / `live-markets.yml` (started with the DAX job) and backup `update-markets.yml`. Correlation views limited to the 20 largest members. Market links added to the tab bars.
 
 - **2026-11-13** — Morning start moved to a weekday Claude scheduled task (08:10 Frankfurt). Kept data files now end the run with a warning instead of a failure. Added this guide and `CLAUDE.md`.
 - **2026-11-12** — Session-long live job replaces the 5-minute cron. Daily data refreshed before the open as well as after the close, plus backup runs. Guards against older data, carry-over of market caps and ECB series, unchanged files not rewritten. Open pages reload new daily data. Market internals: description under each measure, unchanged stocks shown.
