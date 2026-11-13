@@ -99,6 +99,7 @@ The **Crisis history** tab replays the dot-com bust and 9/11, the 2008 financial
 
 ### Documentation and code
 
+- **[docs/REPO_GUIDE.md](docs/REPO_GUIDE.md)**: how the repository works: pages, code layout, data sources and update schedule, safeguards, methodology notes, colour conventions, maintenance calendar and change log.
 - **[docs/RISK_METHODOLOGY.md](docs/RISK_METHODOLOGY.md)**: concepts, formulas, code reference and validation for both layers.
 - **[docs/CRISIS_HISTORY.md](docs/CRISIS_HISTORY.md)**: the crisis episodes, lessons and implementation.
 - Python reference implementations that reproduce the dashboard's numbers:
@@ -130,6 +131,7 @@ No build step, just static files.
 - **GitHub Pages:** push this folder to a repository, then *Settings → Pages → Deploy from a branch → `main` / root*. The dashboard will be live at `https://verjokiel.github.io/FRANKFURT08/#vol`.
 
 ```
+├── CLAUDE.md              working notes for Claude sessions (keep docs/REPO_GUIDE.md current)
 ├── index.html             page layout and text
 ├── dax.html               DAX market page (5-minute live layer + daily data)
 ├── .github/workflows/
@@ -163,7 +165,8 @@ No build step, just static files.
 └── docs/
     ├── INVESTMENT_THESIS.md qualitative case and systematic-risk analysis
     ├── RISK_METHODOLOGY.md risk concepts, formulas, code reference (both layers)
-    └── CRISIS_HISTORY.md   worst-case episodes since 2001 and implementation
+    ├── CRISIS_HISTORY.md   worst-case episodes since 2001 and implementation
+    └── REPO_GUIDE.md      how the repository, data jobs and schedules work; maintenance and change log
 ```
 
 ## Limitations
